@@ -8,7 +8,7 @@ EFIINCS         = -I$(EFIINC) -I$(EFIINC)/$(ARCH) -I$(EFIINC)/protocol
 LIB32           = /usr/lib32
 LIB64           = /usr/lib
 
-CFLAGS          = $(EFIINCS) -fno-stack-protector -fpic \
+CFLAGS          = -I../ $(EFIINCS) -fno-stack-protector -fpic \
 		  -fshort-wchar -mno-red-zone -Wall
 
 ifeq ($(ARCH),x86_64)

@@ -1,23 +1,28 @@
 #ifndef _RWLAZER64_BASE_H_
 #define _RWLAZER64_BASE_H_
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-#include <stdbool.h>
-
 #define RWLAZER_VERSION_MAJOR	0
 #define RWLAZER_VERSION_MINOR	70
 #define RWLAZER_VERSION_BUILD	1000
 
+#define LAZER_RETURN_SUCCESS    0
+#define LAZER_RETURN_ENOPROC    1       /* No process found to match PID */
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+#ifndef LAZER_EFI_ONLY
+
+#include <stdbool.h>
 #define LAZER_READ				0x10
 #define LAZER_WRITE				0x20
 
 #define LAZER_THREADS_MAX		16
 
-#define LAZER_ERROR_NULLPTR									0xFFFFDEAD
+#define LAZER_ERROR_NULLPTR     0xFFFFDEAD
 
-#define LAZER_ADDRESS_INVALID								0xFFFFFFFFDEADBEEF
+#define LAZER_ADDRESS_INVALID	0xFFFFFFFFDEADBEEF
 
 typedef unsigned char           byte;
 typedef unsigned char           uchar;
@@ -39,7 +44,7 @@ typedef unsigned long long      uint64_t;
 typedef unsigned long long      uintptr_t;
 #endif
 #ifndef _PTRDIFF_T_DEFINED
-typedef long long               ptrdiff_t
+typedef long long               ptrdiff_t;
 #endif
 typedef long long               off_t;
 
@@ -74,5 +79,5 @@ typedef struct __lazer_thread {
     DWORD       handle_id;
     struct __lazer_thread* next;
 } lazerthread;
-
-#endif
+#endif  /* LAZER_EFI_ONLY */
+#endif  /* _RWLAZER64_BASE_H_ */

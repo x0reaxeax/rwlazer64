@@ -1,9 +1,7 @@
 #ifndef _RWLAZER_EFIDRIVER_CTL_H_
 #define _RWLAZER_EFIDRIVER_CTL_H_
 
-#ifndef LAZER_EFI_ONLY
 #include "lazer64.h"
-#endif
 
 #ifndef STATUS_SUCCESS
 #define STATUS_SUCCESS										0x00000000
@@ -12,7 +10,7 @@
 #define WIN_PROCESSID_INVALID								0xFFFFFFFF	/* 0xFFFFFFFC is max valid procid */
 #define WIN_PROCESSID_SYSTEM								0x4ULL
 
-#define LAZER_EFI_VARIABLE_NAME								L"rwlazer"
+#define LAZER_EFI_VARIABLE_NAME								L"rwlazer64"
 
 #define DRIVER_HANDLE_UNINITIALIZED							0
 
@@ -25,6 +23,7 @@
 
 typedef struct __memory_command {
 	unsigned int		driver_operation;
+	unsigned int		exit_status;
 	unsigned long long	data[16];
 } memory_command;
 
@@ -33,7 +32,7 @@ typedef struct __proc_info {
 	unsigned long long	base_address;
 } process_info;
 
-#ifndef LAZER_EFI_ONLY
+#if !defined(LAZER_EFI_ONLY) && defined(WIN32)
 
 #include <winnt.h>
 #include <winternl.h>

@@ -2,16 +2,7 @@
 #define _RWLAZER_DRIVER_USERCTL_H_
 
 #include "lazer64.h"
-
-typedef struct __memory_command {
-	uint		driver_operation;
-	uint64_t	data[16];
-} memory_command;
-
-typedef struct __proc_info {
-	uint64_t	process_id;
-	uintptr_t	base_address;
-} process_info;
+#include "driver_userctl.h"
 
 bool driver_initialize(void);
 bool driver_checkefi(process_info* procinfo);
