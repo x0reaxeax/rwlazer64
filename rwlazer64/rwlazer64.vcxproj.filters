@@ -21,9 +21,6 @@
     <ClInclude Include="driverctl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="driver_userctl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lazer64.c">
@@ -35,5 +32,21 @@
     <ClCompile Include="lazer_io.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="logging.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="rwlazer64.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="C:\Users\user\Pictures\Important Picz\RWLAZER64.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
