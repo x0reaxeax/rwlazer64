@@ -121,7 +121,10 @@ const char* lazer_strerror(error_t error_num, bool is_nt_error) {
         "EFI driver failed to retrieve information from RWLAZER64 user process",
         "Attempted to pass NULL pointer",
         "Invalid config entry",
-        "Invalid key value"
+        "Invalid key value",
+        "Driver did not acknowledge user request",
+        "Data conversion failure",
+        "Target process already set"
     };
 
     size_t n_errors = sizeof(lazer_error_list) / sizeof(lazer_error_list[0]);

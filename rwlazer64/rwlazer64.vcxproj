@@ -149,6 +149,7 @@
     <ClCompile Include="lazer_io.c" />
     <ClCompile Include="logging.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="visuals.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="rwlazer64.rc" />

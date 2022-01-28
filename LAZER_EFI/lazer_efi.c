@@ -37,10 +37,10 @@ typedef struct __dummy_protocol_data {
     UINTN empty;
 } dummy_protocol_data;
 
-typedef NTSTATUS            (MS_ABI *PsLookupProcessByProcessId)        (void *proc_handle, void *out_process);
-typedef void *              (MS_ABI *PsGetProcessSectionBaseAddress)    (void *process);
-typedef NTSTATUS            (MS_ABI *MmCopyVirtualMemory)               (void *src_process, void *src_address, void *target_process, void *target_address, UINT64 bufsize, KPROCESSOR_MODE ring_level, SIZE_T *returnsz);
-//typedef PHYSICAL_ADDRESS    (MS_ABI *MmGetPhysicalAddress)              (void *virtual_address);
+typedef NTSTATUS            (MS_ABI *PsLookupProcessByProcessId)        (IN void *proc_handle, OUT KPROCESS **out_process);
+typedef void *              (MS_ABI *PsGetProcessSectionBaseAddress)    (IN KPROCESS *process);
+typedef NTSTATUS            (MS_ABI *MmCopyVirtualMemory)               (KPROCESS *src_process, void *src_address, KPROCESS *target_process, void *target_address, UINT64 bufsize, KPROCESSOR_MODE ring_level, SIZE_T *returnsz);
+typedef PHYSICAL_ADDRESS    (MS_ABI *MmGetPhysicalAddress)              (void *base_address);
 
 /**
  * UINT32  Data1;
@@ -87,19 +87,23 @@ static BOOLEAN runtime              = FALSE;
 static PsLookupProcessByProcessId       get_process_by_pid      = (PsLookupProcessByProcessId)      NULL;
 static PsGetProcessSectionBaseAddress   get_base_address        = (PsGetProcessSectionBaseAddress)  NULL;
 static MmCopyVirtualMemory              copy_virtual_memory     = (MmCopyVirtualMemory)             NULL;
-//static MmGetPhysicalAddress             get_physical_address    = (MmGetPhysicalAddress)            NULL;
+static MmGetPhysicalAddress             get_physical_address    = (MmGetPhysicalAddress)            NULL;
 
 static void printeye(void);
 
 EFI_STATUS exec_cmd(memory_command *cmd) {
-    if (NULL == cmd || cmd->lazer_key != LAZER_KEY) {
+    if (NULL == cmd) {
         return EFI_ABORTED;
     }
 
+    if (LAZER_KEY != cmd->lazer_key) {
+        cmd->exit_status = LAZER_ERROR_BADKEY;
+    }
+
     if (cmd->driver_operation == DRIVER_CMD_GETBADDR) {
-        struct _KPROCESS    *process_ptr    = NULL;
-        LAZER_UINT64        *process_id     = (LAZER_UINT64 *) cmd->data[0];
-        LAZER_UINT64        *result_addr    = (LAZER_UINT64 *) cmd->data[1];
+        KPROCESS            *process_ptr    = NULL;
+        LAZER_UINT64        *process_id     = (LAZER_UINT64 *) cmd->data[LAZER_DATA_DEST_PROCID];
+        LAZER_UINT64        *result_addr    = (LAZER_UINT64 *) cmd->data[LAZER_DATA_RESULT];
         if (get_process_by_pid(process_id, &process_ptr) != STATUS_SUCCESS || process_ptr == NULL) {
             *result_addr = 0;
             cmd->exit_status    = LAZER_ERROR_NOPROC;
@@ -110,20 +114,18 @@ EFI_STATUS exec_cmd(memory_command *cmd) {
         cmd->exit_status    = LAZER_RETURN_SUCCESS;
         return EFI_SUCCESS;
     } else if (cmd->driver_operation == DRIVER_CMD_MEMCPY) {
-        LAZER_UINT64   *dest_process_id     = (LAZER_UINT64 *) cmd->data[0];
-        LAZER_UINT64   *dest_address        = (LAZER_UINT64 *) cmd->data[1];
-        LAZER_UINT64   *src_process_id      = (LAZER_UINT64 *) cmd->data[2];
-        LAZER_UINT64   *src_address         = (LAZER_UINT64 *) cmd->data[3];
-        LAZER_UINT64    size                =                  cmd->data[4];
-        LAZER_UINT64   *result_addr         = (LAZER_UINT64 *) cmd->data[5];
+        LAZER_UINT64   *dest_process_id     = (LAZER_UINT64 *) cmd->data[LAZER_DATA_DEST_PROCID];
+        LAZER_UINT64   *dest_address        = (LAZER_UINT64 *) cmd->data[LAZER_DATA_DEST_ADDR];
+        LAZER_UINT64   *src_process_id      = (LAZER_UINT64 *) cmd->data[LAZER_DATA_SRC_PROCID];
+        LAZER_UINT64   *src_address         = (LAZER_UINT64 *) cmd->data[LAZER_DATA_SRC_ADDR];
+        LAZER_UINT64    size                =                  cmd->data[LAZER_DATA_SIZE];
+        LAZER_UINT64   *result_addr         = (LAZER_UINT64 *) cmd->data[LAZER_DATA_RESULT];
 
         if (src_process_id == (LAZER_UINT64 *) WIN_PROCESSID_SYSTEM) {
             CopyMem(dest_address, src_address, size);
         } else {
-            //struct _KPROCESS *src_processs = NULL;
-            //struct _KPROCESS *dest_process = NULL;
-            void *src_process = NULL;
-            void *dest_process = NULL;
+            KPROCESS *src_process = NULL;
+            KPROCESS *dest_process = NULL;
             SIZE_T outsz = 0;
             int status = STATUS_SUCCESS;
 
@@ -146,15 +148,15 @@ EFI_STATUS exec_cmd(memory_command *cmd) {
         return EFI_SUCCESS;
     } else if (cmd->driver_operation == DRIVER_CMD_GETPROC) {
         /* get function addresses from KernelModuleExport  */
-        get_process_by_pid  = (PsLookupProcessByProcessId)      cmd->data[0];
-        get_base_address    = (PsGetProcessSectionBaseAddress)  cmd->data[1];
-        copy_virtual_memory = (MmCopyVirtualMemory)             cmd->data[2];
-        LAZER_UINT64 resaddr =                                  cmd->data[3];
-        *(LAZER_UINT64 *) resaddr = 1;
-        cmd->exit_status    = LAZER_RETURN_SUCCESS;
+        get_process_by_pid  = (PsLookupProcessByProcessId)      cmd->data[LAZER_DATA_SPEC_ADDREXPORT_0];
+        get_base_address    = (PsGetProcessSectionBaseAddress)  cmd->data[LAZER_DATA_SPEC_ADDREXPORT_1];
+        copy_virtual_memory = (MmCopyVirtualMemory)             cmd->data[LAZER_DATA_SPEC_ADDREXPORT_2];
+        LAZER_UINT64 *resaddr   = (LAZER_UINT64 *) cmd->data[LAZER_DATA_RESULT];
+        *resaddr                = 1;
+        cmd->exit_status        = LAZER_RETURN_SUCCESS;
         return EFI_SUCCESS;
     } else if (cmd->driver_operation == DRIVER_CMD_RDMSR) {
-        uint32_t msr_id = (uint32_t) cmd->data[0];
+        uint32_t msr_id = (uint32_t) cmd->data[LAZER_DATA_SPEC_RDMSR_MSRID];
         uint32_t low32 = 0, high32 = 0;
         __asm__ volatile (  ".intel_syntax noprefix;"
                             "push   rax;"
@@ -176,14 +178,14 @@ EFI_STATUS exec_cmd(memory_command *cmd) {
                             : "rax", "rdx", "rcx"
         );
 
-        cmd->data[1]    = low32;
-        cmd->data[2]    = high32;
+        cmd->data[LAZER_DATA_SPEC_RDMSR_LOW32]    = low32;
+        cmd->data[LAZER_DATA_SPEC_RDMSR_HIGH32]   = high32;
         cmd->exit_status = LAZER_RETURN_SUCCESS;
         return EFI_SUCCESS;
     } else if (cmd->driver_operation == DRIVER_CMD_WRMSR) {
-        uint32_t msr_id = cmd->data[0];
-        uint32_t low32  = cmd->data[1];
-        uint32_t high32 = cmd->data[2];
+        uint32_t msr_id = cmd->data[LAZER_DATA_SPEC_WRMSR_MSRID];
+        uint32_t low32  = cmd->data[LAZER_DATA_SPEC_WRMSR_LOW32];
+        uint32_t high32 = cmd->data[LAZER_DATA_SPEC_WRMSR_HIGH32];
         /* "Undefined or reserved bits in an MSR should be set to values previously read"
          * self_note: when out of testing, probably do rdmsr first or pass read data in cmd->data,
          * before doing wrmsr
@@ -305,8 +307,9 @@ EFI_STATUS efi_main(IN EFI_HANDLE image_handle, IN EFI_SYSTEM_TABLE *system_tabl
     }
 
     EFI_DEVICE_PATH_PROTOCOL *wboot_path = FileDevicePath(loaded_image->DeviceHandle, L"\\EFI\\Microsoft\\Boot\\bootmgfwx.efi");
-    dummy_protocol_data dummy_data = { 0 };
 
+    /* checkout InstallMultipleProtocolInterfaces */
+    dummy_protocol_data dummy_data = { 0 };
     status = LibInstallProtocolInterfaces(&image_handle, &protocol_guid, &dummy_data, NULL);
 
     if (EFI_ERROR(status)) {

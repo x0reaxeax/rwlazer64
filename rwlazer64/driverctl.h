@@ -7,19 +7,24 @@
 #define STATUS_SUCCESS										0x00000000
 #endif
 
-#define WIN_PROCESSID_INVALID								0xFFFFFFFF	/* 0xFFFFFFFC is max valid procid */
+#ifdef PID_ILLEGAL
+#define WIN_PROCESSID_INVALID								PID_ILLEGAL
+#else
+#define WIN_PROCESSID_INVALID								0xFFFFFFFF	/* 0xFFFFFFFC is max valid procid (self note: check out why) */
+#endif /* defined(PID_INVALID) */
+
 #define WIN_PROCESSID_SYSTEM								0x4ULL
 
 #define LAZER_EFI_VARIABLE_NAME								L"rwlazer64"
 
 #define DRIVER_HANDLE_UNINITIALIZED							0
 
-#define DRIVER_CMD_GETBADDR									0x300
-#define DRIVER_CMD_GETPROC									0x310
-#define DRIVER_CMD_RDMSR									0x320
-#define DRIVER_CMD_WRMSR									0x330
-#define DRIVER_CMD_MEMCPY									0x340
-#define DRIVER_CMD_VTOPHYSADDR								0x350
+#define DRIVER_CMD_GETBADDR									LAZER_GETBADDR
+#define DRIVER_CMD_GETPROC									LAZER_GETPROC
+#define DRIVER_CMD_RDMSR									LAZER_RDMSR
+#define DRIVER_CMD_WRMSR									LAZER_WRMSR
+#define DRIVER_CMD_MEMCPY									LAZER_MEMCPY
+#define DRIVER_CMD_VTOPHYSADDR								LAZER_PHYSADDR
 
 #define DRIVER_DATA_LAZERKEY								0xF
 
@@ -163,8 +168,8 @@ NTSTATUS driver_sendcommand(memory_command* cmd);
 NTSTATUS driver_copy_memory(uint64_t dest_process_id, uintptr_t dest_address, uint64_t src_process_id, uintptr_t src_address, size_t size);
 NTSTATUS driver_read_memory(process_info* procinfo, uintptr_t address, byte *outbuf, size_t size);
 NTSTATUS driver_write_memory(process_info* procinfo, uintptr_t address, byte* inputbuf, size_t size);
-NTSTATUS driver_readmsr(uint64_t cpureg);
-NTSTATUS driver_writemsr(uint64_t cpureg, int64_t value);
+NTSTATUS driver_readmsr(uint64_t cpureg, int32_t *low32, int32_t *high32);
+NTSTATUS driver_writemsr(uint64_t cpureg, int32_t low32, int32_t high32);
 uintptr_t driver_get_base_address(process_info *procinfo);
 uintptr_t driver_get_physical_address(process_info* procinfo, uintptr_t virtual_address);
 

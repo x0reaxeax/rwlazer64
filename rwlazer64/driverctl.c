@@ -3,7 +3,7 @@
 #include <intrin.h>
 uintptr_t g_lazer_process_id	= WIN_PROCESSID_INVALID;
 HANDLE g_driver_handle			= DRIVER_HANDLE_UNINITIALIZED;
-GUID EFI_GUID					= { 7 };
+GUID EFI_GUID					= { 0x31c0 };
 
 #ifdef __LAZER_DEBUG
 #include <stdio.h>
@@ -187,15 +187,17 @@ bool driver_initialize(void) {
     byte pslprocbypid[]		= "PsLookupProcessByProcessId";
     byte psgetbaseaddr[]	= "PsGetProcessSectionBaseAddress";
     byte mmcpvirtualmem[]	= "MmCopyVirtualMemory";
+    /* todo: .. physaddr ..*/
 
-    memory_command cmd;
+    memory_command cmd = { 0 };
 
     g_lazer_process_id = GetCurrentProcessId();
 
     log_write(LOG_DEBUG, "Calling SetSystemEnvironmentPrivilege()..");
     status = SetSystemEnvironmentPrivilege(true, &se_sysenv_enabled);
     if (!NT_SUCCESS(status)) { 
-        log_write(LOG_ERROR, "SetSystemEnvironmentPrivilege(): %#02lx", status);
+        /* log_write(LOG_ERROR, "SetSystemEnvironmentPrivilege(): %#02lx", status); */
+        LAZER_SETLASTERR("driver_initialize() -> SetSystemEnvironmentPrivilege()", status, true);
         return false; 
     }
 
@@ -210,15 +212,15 @@ bool driver_initialize(void) {
     log_write(LOG_DEBUG, "Function addresses successfully exported from kernel");
 
     cmd.driver_operation = DRIVER_CMD_GETPROC;
-    cmd.data[0] = pslprocbypid_address;
-    cmd.data[1] = psgetbaseaddr_address;
-    cmd.data[2] = mmcpvirtualmem_address;
-    cmd.data[3] = (uintptr_t) &result;
+    cmd.data[LAZER_DATA_SPEC_ADDREXPORT_0] = pslprocbypid_address;
+    cmd.data[LAZER_DATA_SPEC_ADDREXPORT_1] = psgetbaseaddr_address;
+    cmd.data[LAZER_DATA_SPEC_ADDREXPORT_2] = mmcpvirtualmem_address;
+    cmd.data[LAZER_DATA_RESULT] = (uintptr_t) &result;
 
     status = driver_sendcommand(&cmd);
 
     if (!NT_SUCCESS(status)) { 
-        log_write(LOG_ERROR, "init driver_sendcommand() failure: %ld", status);
+        LAZER_SETLASTERR("driver_initialize()", status, true);
         return false; 
     }
     log_write(LOG_DEBUG, "driver_sendcommand() success: %ld", status);
@@ -239,7 +241,7 @@ bool driver_checkefi(process_info *procinfo) {
 
     base_address = driver_get_base_address(procinfo);
 
-    if (base_address != procinfo->base_address) {
+    if ( base_address != procinfo->base_address || !(LAZER_CHECK_ADDRESS(base_address)) ) {
         return false;
     }
 
@@ -258,32 +260,44 @@ bool driver_checkefi(process_info *procinfo) {
 NTSTATUS driver_sendcommand(memory_command* cmd) {
     if (NULL == cmd) { return LAZER_ERROR_NULLPTR; }
     UNICODE_STRING variable_name = RTL_CONSTANT_STRING(LAZER_EFI_VARIABLE_NAME);
+    cmd->exit_status = LAZER_ERROR_UNINITIALIZED;
     cmd->lazer_key = 0xDE7EC7ED1A7E1264;
     NTSTATUS status = NtSetSystemEnvironmentValueEx(&variable_name, &EFI_GUID, cmd, sizeof(memory_command), EFI_ATTRIBUTES);
+    
     return status;
 }
 
-NTSTATUS driver_readmsr(uint64_t cpureg) {
+NTSTATUS driver_readmsr(uint64_t cpureg, int32_t *low32, int32_t *high32) {
     NTSTATUS status = STATUS_SUCCESS;
-    uintptr_t regvalue = 0;
-    memory_command cmd;
+    memory_command cmd = { 0 };
 
     cmd.driver_operation = DRIVER_CMD_RDMSR;
-    cmd.data[0] = cpureg;
-    cmd.data[1] = (uintptr_t) &regvalue;
+    cmd.data[LAZER_DATA_SPEC_RDMSR_MSRID] = cpureg;
     status = driver_sendcommand(&cmd);
+
+    if (NT_SUCCESS(status)) {
+        *low32  = (int32_t) cmd.data[LAZER_DATA_SPEC_RDMSR_LOW32];
+        *high32 = (int32_t) cmd.data[LAZER_DATA_SPEC_RDMSR_HIGH32];
+    } else {
+        LAZER_SETLASTERR("driver_readmsr()", status, true);
+    }
 
     return status;
 }
 
-NTSTATUS driver_writemsr(uint64_t cpureg, int64_t value) {
+NTSTATUS driver_writemsr(uint64_t cpureg, int32_t low32, int32_t high32) {
     NTSTATUS status = STATUS_SUCCESS;
-    memory_command cmd;
+    memory_command cmd = { 0 };
 
     cmd.driver_operation = DRIVER_CMD_WRMSR;
-    cmd.data[0] = cpureg;
-    cmd.data[1] = value;
+    cmd.data[LAZER_DATA_SPEC_WRMSR_MSRID]  = cpureg;
+    cmd.data[LAZER_DATA_SPEC_WRMSR_LOW32]  = low32;
+    cmd.data[LAZER_DATA_SPEC_WRMSR_HIGH32] = high32;
     status = driver_sendcommand(&cmd);
+
+    if (!NT_SUCCESS(status)) {
+        LAZER_SETLASTERR("driver_writemsr()", status, true);
+    }
 
     return status;
 }
@@ -291,15 +305,15 @@ NTSTATUS driver_writemsr(uint64_t cpureg, int64_t value) {
 NTSTATUS driver_copy_memory(uint64_t dest_process_id, uintptr_t dest_address, uint64_t src_process_id, uintptr_t src_address, size_t size) {
     NTSTATUS status = STATUS_SUCCESS;
     uintptr_t op_result = 0;
-    memory_command cmd;
+    memory_command cmd = { 0 };
 
     cmd.driver_operation = DRIVER_CMD_MEMCPY;
-    cmd.data[0] = dest_process_id;
-    cmd.data[1] = dest_address;
-    cmd.data[2] = src_process_id;
-    cmd.data[3] = src_address;
-    cmd.data[4] = size;
-    cmd.data[5] = (uintptr_t)&op_result;
+    cmd.data[LAZER_DATA_DEST_PROCID]    = dest_process_id;
+    cmd.data[LAZER_DATA_DEST_ADDR]      = dest_address;
+    cmd.data[LAZER_DATA_SRC_PROCID]     = src_process_id;
+    cmd.data[LAZER_DATA_SRC_ADDR]       = src_address;
+    cmd.data[LAZER_DATA_SIZE]           = size;
+    cmd.data[LAZER_DATA_RESULT]         = (uintptr_t)&op_result;
     
     log_write(LOG_DEBUG, 
             "Driver Command:\n"
@@ -309,34 +323,45 @@ NTSTATUS driver_copy_memory(uint64_t dest_process_id, uintptr_t dest_address, ui
             " Source Process ID:  %llu [%#02llx]\n"
             " Source Address:     %#02llx\n"
             " Bytes to copy:      %llu\n",
-        cmd.data[0], cmd.data[0], cmd.data[1], cmd.data[2], cmd.data[2], cmd.data[3], cmd.data[4]
+              cmd.data[LAZER_DATA_DEST_PROCID], cmd.data[LAZER_DATA_DEST_PROCID],
+              cmd.data[LAZER_DATA_DEST_ADDR], 
+              cmd.data[LAZER_DATA_SRC_PROCID],  cmd.data[LAZER_DATA_SRC_PROCID],
+              cmd.data[LAZER_DATA_SRC_ADDR],    cmd.data[LAZER_DATA_SIZE]
     );
 
     status = driver_sendcommand(&cmd);
-    if (NT_SUCCESS(status)) {
+    if (NT_SUCCESS(status) && LAZER_SUCCESS == cmd.exit_status) {
         return (NTSTATUS) op_result;
     }
 
+    LAZER_SETLASTERR("driver_copy_memory()", status, true);
+    log_write(LOG_DEBUG, "EFI exit status: %u", cmd.exit_status);
     return status;
 }
 
 uintptr_t driver_get_base_address(process_info* procinfo) {
-    if (NULL == procinfo) { return LAZER_ERROR_NULLPTR; }
+    if (NULL == procinfo) { 
+        LAZER_SETLASTERR("driver_get_base_address()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ERROR_NULLPTR; 
+    }
     NTSTATUS status = STATUS_SUCCESS;
 
-    memory_command cmd;
+    memory_command cmd = { 0 };
     cmd.driver_operation = DRIVER_CMD_GETBADDR;
-    cmd.data[0] = procinfo->process_id;
-    cmd.data[1] = (uintptr_t)(&(procinfo->base_address));
+    cmd.data[LAZER_DATA_DEST_PROCID] = procinfo->process_id;
+    cmd.data[LAZER_DATA_RESULT]      = (uintptr_t)(&(procinfo->base_address));
     log_write(LOG_DEBUG,
                 "Driver Command:\n"
                 "[*] Operation: DRIVER_CMD_GETBADDR:\n"
                 " Target Process ID:  %llu [%#02llx]\n",
-        cmd.data[0], cmd.data[0]
+        cmd.data[LAZER_DATA_DEST_PROCID], cmd.data[LAZER_DATA_DEST_PROCID]
     );
-    if (!NT_SUCCESS(driver_sendcommand(&cmd))) {
-        /* you sure? */
-        return 0;
+
+    status = driver_sendcommand(&cmd);
+
+    if (!NT_SUCCESS(status)) {
+        LAZER_SETLASTERR("driver_get_base_address()", status, true);
+        return LAZER_ADDRESS_INVALID;
     }
 
     return procinfo->base_address;
@@ -347,11 +372,17 @@ uintptr_t driver_get_physical_address(process_info* procinfo, uintptr_t virtual_
 }
 
 NTSTATUS driver_read_memory(process_info* procinfo, uintptr_t address, byte *outbuf, size_t size) {
-    if (NULL == procinfo || 0 == outbuf) { return LAZER_ERROR_NULLPTR; }
+    if (NULL == procinfo || 0 == outbuf) { 
+        LAZER_SETLASTERR("driver_read_memory()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ERROR_NULLPTR; 
+    }
     return driver_copy_memory(g_lazer_process_id, (uintptr_t) outbuf, procinfo->process_id, address, size);
 }
 
 NTSTATUS driver_write_memory(process_info* procinfo, uintptr_t address, byte* inputbuf, size_t size) {
-    if (NULL == procinfo || NULL == inputbuf) { return LAZER_ERROR_NULLPTR; }
+    if (NULL == procinfo || NULL == inputbuf) { 
+        LAZER_SETLASTERR("driver_write_memory()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ERROR_NULLPTR; 
+    }
     return driver_copy_memory(procinfo->process_id, address, g_lazer_process_id, (uintptr_t) inputbuf, size);
 }
