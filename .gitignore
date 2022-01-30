@@ -3,6 +3,13 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# Ignore all hidden files
+.*
+**/.*
+
+# Ignore x64 dir
+rwlazer64/x64
+
 # User-specific files
 *.rsuser
 *.suo
