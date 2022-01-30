@@ -141,7 +141,7 @@ EFI_STATUS exec_cmd(memory_command *cmd) {
                 return EFI_SUCCESS;
             }
 
-            *result_addr = copy_virtual_memory(src_process, src_address, dest_process, dest_address, size, 1, &outsz);
+            *result_addr = copy_virtual_memory(src_process, src_address, dest_process, dest_address, size, KernelMode, &outsz);
         }
         cmd->exit_status    = LAZER_RETURN_SUCCESS;
 
