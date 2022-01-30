@@ -70,6 +70,36 @@ size_t strtodtsz(char* str_type, bool print_info_only) {
     return 0;
 }
 
+bool check_data_size(size_t data_size) {
+    switch (data_size) {
+        case 1:             /* char */
+            return true;
+            break;
+
+        case 2:             /* short */
+            return true;
+            break;
+
+        case 4:             /* int */
+            return true;
+            break;
+
+        case 8:             /* long long */
+            return true;
+            break;
+
+#ifdef LAZER_FUTURE         /* long double, but right now i have absolutely no idea on how to implement it in the first place.. */
+        case 16:
+            return true;
+            break;
+#endif /* !LAZER_FUTURE */
+
+        default:
+            break;
+    }
+
+    return false;
+}
 
 bool check_hex_input_lookup(byte *str) {
     if (NULL == str) { 
@@ -140,7 +170,8 @@ numbase_t strtou64(byte* input_buf, uintptr_t* output) {
     return input_base;
 }
 
-int lazer64_get_numinput(uint64_t *output, size_t nbytes) {
+/* zavolaj mi, povedz co treba */
+int lazer64_get_numinput(uint64_t *output, bool str_datasz_input, size_t nbytes) {
     if (0 == nbytes) {
         return LAZER_ERROR;
     }
@@ -153,9 +184,16 @@ int lazer64_get_numinput(uint64_t *output, size_t nbytes) {
     }
 
     fgets(input_buffer, (int) nbytes, stdin);
-    numbase_t res_base = strtou64((byte *) input_buffer, &result);
+    
+    /* check if we accept str data sizes */
+    if (str_datasz_input) {
+        result = strtodtsz(input_buffer, false);
+    } else {
+        numbase_t res_base = strtou64((byte *) input_buffer, &result);
+    }
     free(input_buffer);
 
+    /* strtodatasz returns 0 (0 == BASE_ERROR) on failure */
     if (BASE_ERROR == result) {
         return LAZER_ERROR;
     }
@@ -170,9 +208,16 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
         return LAZER_ERROR;
     }
 
-    size_t i, j;
+    if (nbytes > (LAZER_BYTEDATA_MAXLEN - 1)) {
+        LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_OUTBOUNDS, false);
+        return LAZER_ERROR;
+    }
+
+    int64_t i;
+    size_t j;
     size_t slen = 0;
     size_t input_len = 0;
+    int retcode = LAZER_SUCCESS;
     char *input_data = malloc(sizeof(char) * LAZER_BYTEDATA_MAXLEN);
     if (NULL == input_data) {
         LAZER_SETLASTERR("lazer64_get_bytedata()", errno, false);
@@ -187,7 +232,8 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
 
     slen = strlen(input_data);
 
-    for (i = 0, j = 0; i < nbytes && j < slen; i++, j+=2) {
+    /* auto convert to LE */
+    for (i = (nbytes - 1), j = 0; i >= 0 && j < slen; i--, j+=2) {
         char byte_to_convert[2] = { 0 };
         char *endptr = NULL;
         int hexbyte = 0;
@@ -200,8 +246,9 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
         memcpy(byte_to_convert, &input_data[j], 2);
         hexbyte = (int) strtoul(byte_to_convert, &endptr, BASE_HEXADECIMAL);
         
-        if ((uintptr_t) endptr - ((uintptr_t) byte_to_convert) != 2) {
+        if ((uintptr_t) endptr - ((uintptr_t) byte_to_convert) > 2) {
             LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_CONVERSION, false);
+            retcode = LAZER_ERROR;
             break;
         }
 
@@ -212,10 +259,5 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
 
     free(input_data);
 
-    if (i != nbytes) {
-        log_write(LOG_DEBUG, "Conversion byte count mismatch");
-        return LAZER_ERROR;
-    }
-
-    return LAZER_SUCCESS;
+    return retcode;
 }

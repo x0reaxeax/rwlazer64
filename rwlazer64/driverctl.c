@@ -322,7 +322,7 @@ NTSTATUS driver_copy_memory(uint64_t dest_process_id, uintptr_t dest_address, ui
             " Target Address:     %#02llx\n"
             " Source Process ID:  %llu [%#02llx]\n"
             " Source Address:     %#02llx\n"
-            " Bytes to copy:      %llu\n",
+            " Number of bytes:    %llu\n",
               cmd.data[LAZER_DATA_DEST_PROCID], cmd.data[LAZER_DATA_DEST_PROCID],
               cmd.data[LAZER_DATA_DEST_ADDR], 
               cmd.data[LAZER_DATA_SRC_PROCID],  cmd.data[LAZER_DATA_SRC_PROCID],

@@ -11,7 +11,7 @@
 * @param    const char *exec_path   - argv[0]
 * @return   pointer to initialized LAZER64CFG or `NULL` on error
 */
-int lazer64_init(const char **argv) {
+int lazer64_init(int argc, const char **argv) {
     printf("[*] Initializing RWLAZER64..");
     fflush(stdout);
 
@@ -121,6 +121,18 @@ int32_t lazer64_final(error_t exit_code) {
     return exit_code;
 }
 
+static int lazer64_eval_argv(int argc, const char *argv[]) {
+    const size_t max_arg_len = 16;
+    const char *startup_args[] = {
+        "--debug",
+        "--nologo"
+    };
+    
+    for (int i = 1; i < argc; i++) {
+        //if (strncmp(startup_args[i], argv))
+    }
+}
+
 void lazer64_restart(void) {
     if (NULL != lazercfg) {
         if (NULL != lazercfg->target_process) {
@@ -153,7 +165,7 @@ int lazer64_attach(process_info *target_process) {
     printf("[*] Enter PID: ");
     fflush(stdout);
 
-    if (lazer64_get_numinput(&target_pid, LAZER_INPUT_ADDRLEN) != LAZER_SUCCESS) {
+    if (lazer64_get_numinput(&target_pid, false, LAZER_INPUT_ADDRLEN) != LAZER_SUCCESS) {
         goto _ERROR;
     }
 
@@ -190,16 +202,21 @@ static size_t lazer64_mem_write(process_info *target_process) {
 
     printf("[*] Address: ");
     fflush(stdout);
-    lazer64_get_numinput(&target_address, LAZER_INPUT_ADDRLEN);
+    lazer64_get_numinput(&target_address, false, LAZER_INPUT_ADDRLEN);
 
     if (!LAZER_CHECK_ADDRESS(target_address)) {
-        puts("[-] Invalid address");
+        fprintf(stderr, "[-] Invalid address\n");
         return 0;
     }
 
+
     printf("[*] Number of bytes: ");
     fflush(stdout);
-    lazer64_get_numinput(&nbytes, LAZER_INPUT_ADDRLEN);
+
+    if (lazer64_get_numinput(&nbytes, true, LAZER_INPUT_ADDRLEN) != LAZER_SUCCESS) {
+        fprintf(stderr, "[-] Invalid input\n");
+        return 0;
+    }
 
     write_bytes = malloc(sizeof(char) * nbytes);
 
@@ -207,6 +224,8 @@ static size_t lazer64_mem_write(process_info *target_process) {
         LAZER_SETLASTERR("lazer64_mem_write()", errno, false);
         return 0;
     }
+
+    memset(write_bytes, 0, nbytes);
 
     if (lazer64_get_bytedata(write_bytes, nbytes) != LAZER_SUCCESS) {
         free(write_bytes);

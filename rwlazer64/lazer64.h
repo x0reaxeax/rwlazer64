@@ -7,8 +7,8 @@
 #endif
 
 #define RWLAZER_VERSION_MAJOR	0
-#define RWLAZER_VERSION_MINOR	70
-#define RWLAZER_VERSION_BUILD	1000
+#define RWLAZER_VERSION_MINOR	31
+#define RWLAZER_VERSION_BUILD	3010
 
 #define LAZER_RETURN_SUCCESS    EXIT_SUCCESS
 #define LAZER_SUCCESS			LAZER_RETURN_SUCCESS
@@ -27,7 +27,8 @@
 #define LAZER_ERROR_UNINITIALIZED   0x7008
 #define LAZER_ERROR_CONVERSION      0x7009
 #define LAZER_ERROR_ATTACHBUSY      0x700A
-#define _LAZER_ERROR_BARRIER        0x700B
+#define LAZER_ERROR_OUTBOUNDS       0x700B
+#define _LAZER_ERROR_BARRIER        0x700C
 
 /* memory_command data indexes */
 /* General */
@@ -112,6 +113,7 @@ typedef enum _lazer_eficommand {
 #define LAZER_EXIT				((uint32_t) (EXIT_SUCCESS - 1))
 
 #define LAZER_INPUT_ADDRLEN     ( 24 )    /* UINT64_MAX = 20 decimal characters + "0x", newline and nullterm */
+#define LAZER_INPUT_NBYTES      ( 20 )
 #define LAZER_ADDRLEN_HEX       ( 18 ) 
 
 #define LAZER_BYTEDATA_MAXLEN   8192
@@ -240,10 +242,11 @@ ssize_t log_write(loglevel_t log_level, const char* message, ...);
 /**
 * Initializes new RWLAZER64 instance (config struct, process info) and probes EFI driver communication
 *
+* @param    int argc            - argc
 * @param    const char **argv   - argv
 * @return   pointer to initialized LAZER64CFG or `NULL` on error
 */
-int lazer64_init(const char **argv);
+int lazer64_init(int argc, const char **argv);
 
 /**
 * @brief	Finalizes RWLAZER64 instance 
@@ -275,8 +278,9 @@ int lazer64_attach(process_info *target_process);
 /* LAZER_IO */
 numbase_t strtou64(byte* input_buf, uintptr_t* output);
 size_t strtodtsz(char *str_type, bool print_info_only);
-int lazer64_get_numinput(uint64_t *output, size_t nbytes);
+int lazer64_get_numinput(uint64_t *output, bool str_datasz_input, size_t nbytes);
 int lazer64_get_bytedata(byte *output, size_t nbytes);
+bool check_data_size(size_t data_size);
 
 /* Visuals */
 void printeye(void);

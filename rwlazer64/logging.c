@@ -124,7 +124,8 @@ const char* lazer_strerror(error_t error_num, bool is_nt_error) {
         "Invalid key value",
         "Driver did not acknowledge user request",
         "Data conversion failure",
-        "Target process already set"
+        "Target process already set",
+        "Out of bounds"
     };
 
     size_t n_errors = sizeof(lazer_error_list) / sizeof(lazer_error_list[0]);
