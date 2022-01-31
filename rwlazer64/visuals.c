@@ -88,7 +88,7 @@ void print_intro(void) {
     }
     //uintptr_t lazer_baddr = (LAZER_CHECK_ADDRESS(lazercfg->lazer64_procinfo->base_address)) ? lazercfg->lazer64_procinfo->base_address : 
 
-    printf("[ ---========== *** RWLAZER64 *** ==========--- ]\n"
+    printf("\n[ ---========== *** RWLAZER64 *** ==========--- ]\n"
            "  * RWLAZER PID: %llu [%llx]\n"
            "  * RWLAZER Base Address: %s\n"
            "  * EXE Name: '%s'\n%s\n",
@@ -121,4 +121,12 @@ void print_intro(void) {
 void print_datatypes(void) {
     puts("[ -=== DATA TYPE SIZE CHART ===- ]");
     strtodtsz(NULL, true);
+}
+
+void print_help(void) {
+    puts("[*] Startup arguments:\n"
+           "    --help      - Display this dialog\n"
+           "    --nologo    - Disable logo art\n"
+           "    --debug     - Enable debugging logs\n\n"
+    );
 }

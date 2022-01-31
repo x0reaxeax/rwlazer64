@@ -188,9 +188,12 @@ int lazer64_get_numinput(uint64_t *output, bool str_datasz_input, size_t nbytes)
     /* check if we accept str data sizes */
     if (str_datasz_input) {
         result = strtodtsz(input_buffer, false);
-    } else {
-        numbase_t res_base = strtou64((byte *) input_buffer, &result);
+    } 
+    
+    if (0 == result) {
+        strtou64((byte *) input_buffer, &result);
     }
+    
     free(input_buffer);
 
     /* strtodatasz returns 0 (0 == BASE_ERROR) on failure */
@@ -208,48 +211,78 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
         return LAZER_ERROR;
     }
 
-    if (nbytes > (LAZER_BYTEDATA_MAXLEN - 1)) {
+    if (nbytes > (LAZER_BYTEDATA_MAXLEN - 1) || 0 == nbytes) {
         LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_OUTBOUNDS, false);
         return LAZER_ERROR;
     }
 
-    int64_t i;
-    size_t j;
-    size_t slen = 0;
+    size_t i;
+    int64_t j;
     size_t input_len = 0;
+    size_t wbytes = nbytes * 2;
+
+    int shift = 0, pad = 2;
     int retcode = LAZER_SUCCESS;
     char *input_data = malloc(sizeof(char) * LAZER_BYTEDATA_MAXLEN);
     if (NULL == input_data) {
         LAZER_SETLASTERR("lazer64_get_bytedata()", errno, false);
         return LAZER_ERROR;
     }
+
+    memset(input_data, 0, LAZER_BYTEDATA_MAXLEN);
+    
     printf("[*] Byte data: ");
     fflush(stdout);
 
     while ((input_data[input_len] = getchar()) != '\n' && input_len < LAZER_BYTEDATA_MAXLEN) {
-        input_len++;
+        if (isxdigit(input_data[input_len])) {
+            /* count valid hex char */
+            input_len++;
+        }
     }
 
-    slen = strlen(input_data);
+    input_data[strcspn(input_data, "\n")] = 0;
+    if ((input_len % 2) != 0) {
+        /* check if leading zero is missing from first byte */
+        shift = 1;
+    }
+
+    if (input_len < 2) {
+        /* one char byte entry */
+        pad = 1;
+    }
+
+    if (wbytes < input_len) {
+        input_len = wbytes;
+    }
 
     /* auto convert to LE */
-    for (i = (nbytes - 1), j = 0; i >= 0 && j < slen; i--, j+=2) {
-        char byte_to_convert[2] = { 0 };
+    for (i = 0, j = (input_len - pad); i < nbytes && j >= 0; i++, j -= pad) {
+        char byte_to_convert[3] = { 0 };
         char *endptr = NULL;
+        ptrdiff_t cpy_diff;
         int hexbyte = 0;
 
         /* omit spaces */
         while (input_data[j] == ' ') {
-            j++;
+            j--;
         }
 
-        memcpy(byte_to_convert, &input_data[j], 2);
+        memcpy(byte_to_convert, &input_data[j], pad);
+        byte_to_convert[2] = 0;
         hexbyte = (int) strtoul(byte_to_convert, &endptr, BASE_HEXADECIMAL);
         
-        if ((uintptr_t) endptr - ((uintptr_t) byte_to_convert) > 2) {
+        cpy_diff = (uintptr_t) endptr - ((uintptr_t) byte_to_convert);
+        
+        if (cpy_diff > pad) {
             LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_CONVERSION, false);
             retcode = LAZER_ERROR;
             break;
+        }
+
+        if (shift == 1 && j == 1) {
+            /* last byte with missing zero-pad */
+            pad = 1;
         }
 
         if (hexbyte <= UINT8_MAX) { /* pointless, but log debugging info anyway */
