@@ -7,8 +7,8 @@
 #endif
 
 #define RWLAZER_VERSION_MAJOR	0
-#define RWLAZER_VERSION_MINOR	31
-#define RWLAZER_VERSION_BUILD	3010
+#define RWLAZER_VERSION_MINOR	32
+#define RWLAZER_VERSION_BUILD	3020
 
 #define LAZER_RETURN_SUCCESS    EXIT_SUCCESS
 #define LAZER_SUCCESS			LAZER_RETURN_SUCCESS
@@ -119,6 +119,12 @@ typedef enum _lazer_eficommand {
 
 #define LAZER_BYTEDATA_MAXLEN   8192
 
+#define LAZER_FLAG_MEMREAD      (1 << 0)
+#define LAZER_FLAG_MEMWRITE     (1 << 1)
+#define LAZER_FLAG_ZEROMEMORY   (1 << 2)
+#define LAZER_FLAG_MEMSET       (1 << 3)
+#define LAZER_FLAG_EXTREAD      (1 << 4)
+
 #define	COLOR_WHITE				7
 #define COLOR_BLUE				9
 #define COLOR_RED				12
@@ -175,8 +181,8 @@ typedef enum _lazer_ctype {
 } ctype_t;
 
 typedef enum _lazer_memop {
-    LAZER_MEMOP_READ,
-    LAZER_MEMOP_WRITE
+    LAZER_MEMOP_READ    = LAZER_FLAG_MEMREAD,
+    LAZER_MEMOP_WRITE   = LAZER_FLAG_MEMWRITE
 } lazer64_memop;
 
 typedef struct proc_info {
@@ -305,6 +311,9 @@ void print_help(void);
 void print_intro(void);
 void print_datatypes(void);
 void print_random_startup_quote(void);
+
+/* misc tools */
+void lazer64_ftox_calc(void);
 
 #endif  /* LAZER_EFI_ONLY */
 #endif  /* _RWLAZER64_BASE_H_ */

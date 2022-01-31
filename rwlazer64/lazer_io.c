@@ -294,3 +294,20 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
 
     return retcode;
 }
+
+void lazer64_ftox_calc(void) {
+    char fs_input[256] = { 0 };
+
+    printf("[*] Float value: ");
+    fflush(stdout);
+
+    fgets(fs_input, sizeof(fs_input), stdin);
+
+    float input = strtof(fs_input, NULL);
+    union {
+        float fpval;
+        uint64_t uxval;
+    } f2u64 = { .fpval = input };
+
+    printf("[+] F2X: %f -> %#04llx\n", input, f2u64.uxval);
+}

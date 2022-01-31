@@ -236,46 +236,30 @@ _ERROR:
     return LAZER_ERROR;
 }
 
-static size_t lazer64_mem_write(process_info *target_process) {
+static size_t lazer64_mem_write(process_info *target_process, uintptr_t target_address, byte *force_write_byte_buf, size_t nbytes) {
     if (NULL == target_process) {
         LAZER_SETLASTERR("lazer64_mem_write()", LAZER_ERROR_NULLPTR, false);
         return 0;
     }
 
-    size_t nbytes = 0;
-    byte *write_bytes = NULL;
-    uintptr_t target_address = LAZER_ADDRESS_INVALID;
 
-    printf("[*] Address: ");
-    fflush(stdout);
-    lazer64_get_numinput(&target_address, false, LAZER_INPUT_ADDRLEN);
+    byte *write_byte_buf = NULL;
+    if (force_write_byte_buf != NULL) {
+        write_byte_buf = force_write_byte_buf;
+    } else {
+        write_byte_buf = malloc(sizeof(byte) * nbytes);
 
-    if (!LAZER_CHECK_ADDRESS(target_address)) {
-        fprintf(stderr, "[-] Invalid address\n");
-        return 0;
-    }
+        if (NULL == write_byte_buf) {
+            LAZER_SETLASTERR("lazer64_mem_write()", errno, false);
+            return 0;
+        }
+        
+        memset(write_byte_buf, 0, nbytes);
 
-
-    printf("[*] Number of bytes: ");
-    fflush(stdout);
-
-    if (lazer64_get_numinput(&nbytes, true, LAZER_INPUT_ADDRLEN) != LAZER_SUCCESS) {
-        fprintf(stderr, "[-] Invalid input\n");
-        return 0;
-    }
-
-    write_bytes = malloc(sizeof(char) * nbytes);
-
-    if (NULL == write_bytes) {
-        LAZER_SETLASTERR("lazer64_mem_write()", errno, false);
-        return 0;
-    }
-
-    memset(write_bytes, 0, nbytes);
-
-    if (lazer64_get_bytedata(write_bytes, nbytes) != LAZER_SUCCESS) {
-        free(write_bytes);
-        return 0;
+        if (lazer64_get_bytedata(write_byte_buf, nbytes) != LAZER_SUCCESS) {
+            free(write_byte_buf);
+            return 0;
+        }
     }
 
     if (lazercfg->confirm_messages) {
@@ -291,7 +275,7 @@ static size_t lazer64_mem_write(process_info *target_process) {
         );
 
         for (size_t i = 0; i < nbytes; i++) {
-            printf("%#04x ", write_bytes[i]);
+            printf("0x%02x ", write_byte_buf[i]);
         }
         printf("\n[*] Confirm [y/N]: ");
         fflush(stdout);
@@ -304,31 +288,118 @@ static size_t lazer64_mem_write(process_info *target_process) {
         }
     }
 
-    if (!NT_SUCCESS(driver_write_memory(target_process, target_address, write_bytes, nbytes))) {
+    if (!NT_SUCCESS(driver_write_memory(target_process, target_address, write_byte_buf, nbytes))) {
         nbytes = 0;
     }
 
 _FINAL:
-    free(write_bytes);
+    if (NULL == force_write_byte_buf) {
+        free(write_byte_buf);
+    }
     return nbytes;
 }
 
-static size_t lazer64_mem_read(process_info *target_process) {
-    return 0;
+static size_t lazer64_mem_read(process_info *target_process, uintptr_t target_address, byte *force_read_byte_buf, size_t nbytes, bool quiet) {
+    if (NULL == target_process) {
+        LAZER_SETLASTERR("lazer64_mem_read()", LAZER_ERROR_NULLPTR, false);
+        return 0;
+    }
+
+    byte *read_byte_buf = NULL;
+    if (NULL != force_read_byte_buf) {
+        read_byte_buf = force_read_byte_buf;
+    } else {
+        read_byte_buf = malloc(sizeof(byte) * nbytes);
+        
+        if (NULL == read_byte_buf) {
+            LAZER_SETLASTERR("lazer64_mem_read()", errno, false);
+            return 0;
+        }
+        
+        memset(read_byte_buf, 0, nbytes);
+    }
+
+    
+    if (!NT_SUCCESS(driver_read_memory(target_process, target_address, read_byte_buf, nbytes))) {
+        nbytes = 0;
+    } else {
+        printf("\n[ -=== READ RESULT ===- ]\n"
+               "  * Target Address:  %#02llx\n"
+               "  * Number of bytes: %zu\n"
+               "[BYTE DATA]:\n",
+               target_address,
+               nbytes
+        );
+    }
+
+
+    if (!quiet) {
+        for (int64_t i = (nbytes - 1); i >= 0; i--) {
+            printf("%02x ", read_byte_buf[i]);
+        }
+        putchar('\n');
+    }
+
+    if (NULL == force_read_byte_buf) {
+        free(read_byte_buf);
+    }
+    return nbytes;
 }
 
 
-int lazer64_memrw(process_info *target_process, lazer64_memop memop, size_t *szout) {
+int lazer64_memrw(process_info *target_process, lazer64_memop memop, uint8_t flags, size_t *szout) {
+    if (NULL == target_process) {
+        LAZER_SETLASTERR("lazer64_memrw()", LAZER_ERROR_NULLPTR, false);
+        fprintf(stderr, "[-] No target process set\n");
+        return LAZER_ERROR;
+    }
+
     int ret_code = LAZER_SUCCESS;
     size_t affected_bytes = 0;
+    
+    size_t nbytes = 0;
+    uintptr_t target_address = LAZER_ADDRESS_INVALID;
+
+    printf("[*] Address: ");
+    fflush(stdout);
+    lazer64_get_numinput(&target_address, false, LAZER_INPUT_ADDRLEN);
+
+    if (!LAZER_CHECK_ADDRESS(target_address)) {
+        fprintf(stderr, "[-] Invalid address\n");
+        return LAZER_ERROR;
+    }
+
+    printf("[*] Number of bytes: ");
+    fflush(stdout);
+
+    if (lazer64_get_numinput(&nbytes, true, LAZER_INPUT_ADDRLEN) != LAZER_SUCCESS) {
+        fprintf(stderr, "[-] Invalid input\n");
+        return LAZER_ERROR;
+    }
+
+    if (0 == nbytes) {
+        return LAZER_SUCCESS;
+    }
 
     switch (memop) {
         case LAZER_MEMOP_READ:
-            affected_bytes = lazer64_mem_read(target_process);
+            ; bool quiet = (flags == (memop | LAZER_FLAG_EXTREAD)) ? true : false;
+            affected_bytes = lazer64_mem_read(target_process, target_address, NULL, nbytes, quiet);
             break;
 
         case LAZER_MEMOP_WRITE:
-            affected_bytes = lazer64_mem_write(target_process);
+            ; byte *byte_buf = NULL;
+            if ((flags & (LAZER_FLAG_ZEROMEMORY)) > 0) {
+                byte_buf = malloc(sizeof(byte) * nbytes);
+                if (NULL == byte_buf) {
+                    LAZER_SETLASTERR("lazer64_memrw()", errno, false);
+                    return 0;
+                }
+
+                memset(byte_buf, 0, nbytes);
+            }
+            affected_bytes = lazer64_mem_write(target_process, target_address, byte_buf, nbytes);
+            free(byte_buf);
             break;
 
         default:
@@ -413,12 +484,23 @@ uint32_t lazer64_menu_input_handler(char *input) {
 
         /* --- Read Operations --- */
         case 30:
+            lazer64_memrw(lazercfg->target_process, LAZER_MEMOP_READ, 0, NULL);
             break;
 
+        /* --- Write Operations --- */
         case 40:
-            lazer64_memrw(lazercfg->target_process, LAZER_MEMOP_WRITE, NULL);
+            lazer64_memrw(lazercfg->target_process, LAZER_MEMOP_WRITE, 0, NULL);
             break;
         
+        case 45:
+            lazer64_memrw(lazercfg->target_process, LAZER_MEMOP_WRITE, LAZER_FLAG_ZEROMEMORY, NULL);
+            break;
+
+        /* --- misc ---- */
+        case 60:
+            lazer64_ftox_calc();
+            break;
+
         /* eggz */
         case 0x777:
             puts("*** CRACKED BY RAZOR1911 ***");

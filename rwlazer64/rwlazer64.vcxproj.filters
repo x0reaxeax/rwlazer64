@@ -51,5 +51,8 @@
     <Image Include="C:\Users\user\Pictures\Important Picz\RWLAZER64.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="RWLAZER64.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
