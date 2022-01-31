@@ -310,7 +310,6 @@ void printeye(void);
 void print_help(void);
 void print_intro(void);
 void print_datatypes(void);
-void print_random_startup_quote(void);
 
 /* misc tools */
 void lazer64_ftox_calc(void);

@@ -205,6 +205,10 @@ int lazer64_get_numinput(uint64_t *output, bool str_datasz_input, size_t nbytes)
     return LAZER_SUCCESS;
 }
 
+int lazer64_get_strdata(process_info *target_process, byte *output, uintptr_t address, size_t max_bytes) {
+    return LAZER_SUCCESS;
+}
+
 int lazer64_get_bytedata(byte *output, size_t nbytes) {
     if (NULL == output) {
         LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_NULLPTR, false);

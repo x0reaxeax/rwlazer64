@@ -130,35 +130,3 @@ void print_help(void) {
            "    --debug     - Enable debugging logs\n\n"
     );
 }
-
-void print_random_startup_quote(void) {
-    char quotes[][128] = {
-        "Deploying 64 heavy-duty lazers..",
-        "Molotov cocktail z Grey Goose",
-        "Just use radare2",
-        "R-W-L-A-Z-E-R, what's your emergency?",
-        "Downloading Digital Insanity Keygen..",
-        "No BSOD? Whaaaaat???",
-        "914nm Lazer a suprava od Louis V",
-        "=== I n T e G r A t E d  =  C i R c U i T s ===",
-        "Writing to PID 4 is usually a bad idea",
-        "Ah shit, here we go again..",
-        "Please tell me this is a Virtual Machine..",
-        "300Gs, full-speed",
-        "Used by professional spijons",
-        "Interpol boys, keep your nasty hands away",
-        "No Giorgio Armani suit detected, exiting..",
-        "Using RWLAZER grants diplomatic immunity",
-        "Predecessor of RWLAZER128",
-        "Goldman Sachs cely majetok prec.."
-    };
-
-    size_t nquotes = sizeof(quotes) / sizeof(quotes[0]);
-    uint64_t tick = GetTickCount64();
-    srand((unsigned int) tick);
-
-    unsigned int psrnum = (rand() % (nquotes + 1));
-    if (psrnum < nquotes) {
-        printf("< %s >\n", quotes[psrnum]);
-    }
-}

@@ -332,7 +332,6 @@ static size_t lazer64_mem_read(process_info *target_process, uintptr_t target_ad
         );
     }
 
-
     if (!quiet) {
         for (int64_t i = (nbytes - 1); i >= 0; i--) {
             printf("%02x ", read_byte_buf[i]);
@@ -529,7 +528,6 @@ uint32_t lazer64_menu_input_handler(char *input) {
 int lazer64_menu(lbool display_logo) {
     if (display_logo) {
         printeye();
-        print_random_startup_quote();
     }
 
     print_intro();
