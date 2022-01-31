@@ -115,6 +115,7 @@ typedef enum _lazer_eficommand {
 #define LAZER_INPUT_ADDRLEN     ( 24 )    /* UINT64_MAX = 20 decimal characters + "0x", newline and nullterm */
 #define LAZER_INPUT_NBYTES      ( 20 )
 #define LAZER_ADDRLEN_HEX       ( 18 ) 
+#define LAZER_ARGLEN_MAX        32
 
 #define LAZER_BYTEDATA_MAXLEN   8192
 
@@ -137,6 +138,18 @@ typedef uint8_t					byte;
 typedef int32_t					error_t;
 typedef int64_t					off_t;
 typedef volatile bool           lzrmutex_t;
+
+typedef enum _lazer_bool {      /* int */
+    LAZER_FALSE = 0,
+    LAZER_TRUE = 1
+} lbool;
+
+typedef enum _lazer_arg_id {
+    LAZER_ARG_NULL = 0,
+    LAZER_ARG_DEBUG,
+    LAZER_ARG_NOLOGO,
+    LAZER_ARG_HELP
+} argid_t;
 
 /* logging levels */
 typedef enum _lazer_log_level {
@@ -183,7 +196,8 @@ typedef struct lazer_settings {
     int32_t			exit_code;					/* LAZER exit code */
     error_t			last_errno;					/* last error number */
     int32_t			log_status;					/* log file write flag for displaying "log updated.." message */
-    int32_t         __pad;
+    int32_t         launch_pass;                /* has to be set in order to init lazer. 
+                                                 * used for situations where lazer is not meant to start, like passing '--help' arg at startup */
     uint16_t		log_level;                  /* minimal logging severity level */
     WORD			default_console_attr;		/* LAZER console text attrb */
     HANDLE		    h_console;					/* LAZER console handle */
@@ -209,6 +223,7 @@ typedef struct lazer_thread {
 extern lazer64_cfg_t *lazercfg;
 
 /* Logging */
+char *log_lvl_to_str(int loglevel);
 ssize_t log_write(loglevel_t log_level, const char* message, ...);
 
 /* Reads last error value */
@@ -256,8 +271,10 @@ int32_t lazer64_final(error_t exit_code);
 
 /**
 * @brief Main menu input loop
+* 
+* @param    lbool display_logo  - display/omit logo visual
 */
-int lazer64_menu(void);
+int lazer64_menu(lbool display_logo);
 
 /**
 * @brief Converts error number to a string containing information on specified error
@@ -284,6 +301,7 @@ bool check_data_size(size_t data_size);
 
 /* Visuals */
 void printeye(void);
+void print_help(void);
 void print_intro(void);
 void print_datatypes(void);
 

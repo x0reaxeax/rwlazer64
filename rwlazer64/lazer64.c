@@ -5,6 +5,55 @@
 
 #include <stdio.h>
 
+static argid_t lazer64_strargid(const char *input) {
+    if (NULL == input) {
+        LAZER_SETLASTERR("lazer64_strargid()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ARG_NULL;
+    }
+
+    const char *startup_args[] = {
+        "--debug",
+        "--nologo",
+        "--help"
+    };
+
+    argid_t nargs = sizeof(startup_args) / sizeof(startup_args[0]);
+
+    for (argid_t i = 0; i < nargs; i++) {
+        if (strncmp(startup_args[i], input, LAZER_ARGLEN_MAX) == EXIT_SUCCESS) {
+            return (i + 1);
+        }
+    }
+    return LAZER_ARG_NULL;
+}
+
+static int lazer64_eval_argv(int argc, const char *argv[]) {
+    for (int i = 1; i < argc; i++) {
+        argid_t cur_arg = lazer64_strargid(argv[i]);
+        switch (cur_arg) {
+            case LAZER_ARG_DEBUG:
+                log_write(LOG_DEBUG, "300Gs, full speed");
+                lazercfg->log_level = LOG_DEBUG;
+                break;
+
+            case LAZER_ARG_NOLOGO:
+                //lazercfg->__pad
+                break;
+
+            case LAZER_ARG_HELP:
+                print_help();
+                lazercfg->launch_pass = 0;
+                break;
+
+            default:
+                log_write(LOG_NOTIF, "Unknown argument: '%s'", argv[i]);
+                break;
+        }
+    }
+
+    return LAZER_SUCCESS;
+}
+
 /**
 * Initializes LAZER64 config struct and probes EFI driver communication
 * 
@@ -38,9 +87,11 @@ int lazer64_init(int argc, const char **argv) {
 
     /* set defaults */
     lazercfg->exit_code = LAZER_SUCCESS;
+    lazercfg->lazer64_procinfo = lazerinfo;
     lazercfg->operation_history = operation_log;
 
     lazercfg->log_status = 0;
+    lazercfg->launch_pass = 1;
     lazercfg->confirm_messages = 1;
     lazercfg->log_level = (uint16_t) LOG_NOTIF;
     
@@ -48,6 +99,14 @@ int lazer64_init(int argc, const char **argv) {
     lazercfg->default_console_attr = 0;
     
     lazerinfo->exec_path = argv[0];
+
+    /* eval startup args */
+    lazer64_eval_argv(argc, argv);
+    log_write(LOG_DEBUG, "Set loglevel: %s", log_lvl_to_str(lazercfg->log_level));
+
+    if (lazercfg->launch_pass != 1) {
+        return LAZER_EXIT;
+    }
 
     h_console = GetStdHandle(STD_OUTPUT_HANDLE);
 
@@ -75,7 +134,6 @@ int lazer64_init(int argc, const char **argv) {
     }
 
     lazercfg->h_console = h_console;
-    lazercfg->lazer64_procinfo = lazerinfo;
     
     log_write(LOG_NOTIF, "Successfully initialized RWLAZER64");
     printf("\r[+] Successfully initialized RWLAZER64\n");
@@ -90,7 +148,7 @@ LAZER_INIT_FAIL:
 }
 
 int32_t lazer64_final(error_t exit_code) {
-    puts("[+] Exiting..\n");
+    puts("\n[+] Exiting..\n");
     if (NULL != lazercfg) {
         /* check if default command line text color has been saved and if so, restore it */
         if (lazercfg->default_console_attr) {
@@ -119,18 +177,6 @@ int32_t lazer64_final(error_t exit_code) {
     log_write(LOG_NOTIF, "Shutting down..");
 
     return exit_code;
-}
-
-static int lazer64_eval_argv(int argc, const char *argv[]) {
-    const size_t max_arg_len = 16;
-    const char *startup_args[] = {
-        "--debug",
-        "--nologo"
-    };
-    
-    for (int i = 1; i < argc; i++) {
-        //if (strncmp(startup_args[i], argv))
-    }
 }
 
 void lazer64_restart(void) {
@@ -398,9 +444,11 @@ uint32_t lazer64_menu_input_handler(char *input) {
     return return_value;
 }
 
-int lazer64_menu(void) {
-_INTRO:
-    printeye();
+int lazer64_menu(lbool display_logo) {
+    if (display_logo) {
+        printeye();
+    }
+
     print_intro();
 
     char input_buffer[16] = { 0 };
@@ -420,7 +468,7 @@ _INTRO:
         fflush(stdout);
     }
     if (LAZER_JMPINTRO == return_value) {
-        goto _INTRO;
+        lazer64_menu(LAZER_FALSE);
     }
 
     return (return_value == LAZER_EXIT) ? LAZER_SUCCESS : LAZER_ERROR;
