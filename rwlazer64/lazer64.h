@@ -304,6 +304,7 @@ void printeye(void);
 void print_help(void);
 void print_intro(void);
 void print_datatypes(void);
+void print_random_startup_quote(void);
 
 #endif  /* LAZER_EFI_ONLY */
 #endif  /* _RWLAZER64_BASE_H_ */

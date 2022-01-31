@@ -447,6 +447,7 @@ uint32_t lazer64_menu_input_handler(char *input) {
 int lazer64_menu(lbool display_logo) {
     if (display_logo) {
         printeye();
+        print_random_startup_quote();
     }
 
     print_intro();

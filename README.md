@@ -7,7 +7,7 @@ Win64 UEFI Driver-based tool for unrestricted memory R/W
 
 ## Current status
 This is a complete rewrite of rwlazer-alpha in pure C, no bloat++.  
-The rewrite is not usable yet and this repository is not up-to-date with current development process, I'm actively working on it in private repos.  
+The rewrite is ~~not usable yet~~ a usable POC, this repository is not up-to-date with current development process, I'm actively working on it in private repos.  
 
 
 ## What can OLD RWLAZER do?
