@@ -3,6 +3,11 @@
 
 #include "rst_hooks.h"
 
+#define OBJ_CASE_INSENSITIVE                0x00000040L
+#define SECTION_MAP_READ                    0x0004
+
+#define STATUS_INVALID_HANDLE               0xC0000008
+
 typedef char                CCHAR;
 typedef signed char         CHAR;
 typedef unsigned char       UCHAR;
@@ -18,18 +23,44 @@ typedef unsigned long long  LAZER_UINT64;
 typedef ULONG_PTR           SIZE_T;
 
 typedef void *              PVOID;
+typedef void *              HANDLE;
 
 typedef LONG KPRIORITY;
 typedef UCHAR KIRQL, *PKIRQL;
 typedef ULONG_PTR KSPIN_LOCK, *PKSPIN_LOCK;
 typedef ULONG KAFFINITY, *PKAFFINITY;
 typedef CCHAR KPROCESSOR_MODE;
+typedef DWORD ACCESS_MASK;
 
 typedef enum _MODE {
   KernelMode,
   UserMode,
   MaximumMode
 } MODE;
+
+typedef struct _UNICODE_STRING {
+  unsigned short Length;
+  unsigned short MaximumLength;
+  WCHAR         *Buffer;
+} UNICODE_STRING, *PUNICODE_STRING;
+
+typedef struct _OBJECT_ATTRIBUTES {
+  ULONG           Length;
+  HANDLE          RootDirectory;
+  PUNICODE_STRING ObjectName;
+  ULONG           Attributes;
+  PVOID           SecurityDescriptor;
+  PVOID           SecurityQualityOfService;
+} OBJECT_ATTRIBUTES, *POBJECT_ATTRIBUTES;
+
+#define InitializeObjectAttributes( p, n, a, r, s ) { \
+    (p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
+    (p)->RootDirectory = r;                             \
+    (p)->Attributes = a;                                \
+    (p)->ObjectName = n;                                \
+    (p)->SecurityDescriptor = s;                        \
+    (p)->SecurityQualityOfService = NULL;               \
+}
 
 typedef union _LARGE_INTEGER {
     struct {

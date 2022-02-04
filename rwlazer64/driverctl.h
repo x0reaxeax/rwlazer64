@@ -25,6 +25,11 @@
 #define DRIVER_CMD_WRMSR									LAZER_WRMSR
 #define DRIVER_CMD_MEMCPY									LAZER_MEMCPY
 #define DRIVER_CMD_VTOPHYSADDR								LAZER_PHYSADDR
+#define DRIVER_CMD_READPHYSMEM                              LAZER_READPHYS
+#define DRIVER_CMD_WRITEPHYSMEM                             LAZER_WRITEPHYS
+#define DRIVER_CMD_VTOPHYS_NONPAGED                         LAZER_VTOPNONPG
+#define DRIVER_CMD_GETDIRTABLEBASE                          LAZER_DIRTBLBASE
+#define DRIVER_CMD_DEBUGOP                                  LAZER_DEBUGOP
 
 #define DRIVER_DATA_LAZERKEY								0xF
 
@@ -32,7 +37,8 @@ typedef struct __memory_command {
     unsigned int		driver_operation;
     unsigned int		exit_status;
     unsigned long long	lazer_key;
-    unsigned long long  data[16];
+    unsigned long long  data[24];
+    unsigned char       byte_data[64];
 } memory_command;
 
 #if !defined(LAZER_EFI_ONLY) && defined(WIN32)
@@ -171,7 +177,10 @@ NTSTATUS driver_write_memory(process_info* procinfo, uintptr_t address, byte* in
 NTSTATUS driver_readmsr(uint64_t cpureg, int32_t *low32, int32_t *high32);
 NTSTATUS driver_writemsr(uint64_t cpureg, int32_t low32, int32_t high32);
 uintptr_t driver_get_base_address(process_info *procinfo);
-uintptr_t driver_get_physical_address(process_info* procinfo, uintptr_t virtual_address);
+uintptr_t driver_get_directorybasetable(process_info* procinfo);
+int driver_mmgetphysicaladdress(uintptr_t target_address, uint32_t *low, int32_t *high, uint64_t *quad);
+NTSTATUS driver_read_phys_memory(byte *output, uintptr_t target_phys_addr, size_t nbytes);
+NTSTATUS driver_open_physical_memory(uint64_t *ret_status, uint32_t *exit_code);
 
 #endif
 

@@ -32,7 +32,7 @@ static int lazer64_eval_argv(int argc, const char *argv[]) {
         argid_t cur_arg = lazer64_strargid(argv[i]);
         switch (cur_arg) {
             case LAZER_ARG_DEBUG:
-                log_write(LOG_DEBUG, "300Gs, full speed");
+                log_write(LOG_DEBUG, "300Gs, full speed");  /* impossible notification, unless i decide to implement a config file */
                 lazercfg->log_level = LOG_DEBUG;
                 break;
 
@@ -87,8 +87,12 @@ int lazer64_init(int argc, const char **argv) {
 
     /* set defaults */
     lazercfg->exit_code = LAZER_SUCCESS;
-    lazercfg->lazer64_procinfo = lazerinfo;
     lazercfg->operation_history = operation_log;
+    
+    lazercfg->lazer64_procinfo = lazerinfo;
+    lazercfg->lazer64_procinfo->base_address = LAZER_ADDRESS_INVALID;
+    lazercfg->lazer64_procinfo->process_id = WIN_PROCESSID_INVALID;
+    lazercfg->lazer64_procinfo->exec_path = argv[0];
 
     lazercfg->log_status = 0;
     lazercfg->launch_pass = 1;
@@ -115,6 +119,8 @@ int lazer64_init(int argc, const char **argv) {
         goto LAZER_INIT_FAIL;
     }
 
+    lazercfg->h_console = h_console;
+
     if (GetConsoleScreenBufferInfo(h_console, &csbi)) {
         lazercfg->default_console_attr = csbi.wAttributes;
     } else {
@@ -133,8 +139,6 @@ int lazer64_init(int argc, const char **argv) {
         goto LAZER_INIT_FAIL;
     }
 
-    lazercfg->h_console = h_console;
-    
     log_write(LOG_NOTIF, "Successfully initialized RWLAZER64");
     printf("\r[+] Successfully initialized RWLAZER64\n");
 
@@ -414,6 +418,77 @@ int lazer64_memrw(process_info *target_process, lazer64_memop memop, uint8_t fla
     return ret_code;
 }
 
+int lazer64_phys(void) {
+#ifdef _LAZER_TESTING
+    size_t nbytes = 8;
+    byte output[64] = { 0 };
+    uintptr_t target_address = 0;
+
+    lazer64_prompt_address(&target_address);
+
+    if (driver_read_phys_memory(output, target_address, nbytes) != LAZER_SUCCESS) {
+        return LAZER_ERROR;
+    }
+
+    puts("[ -=== BYTE DATA ===- ]");
+    for (size_t i = 0; i < nbytes; i++) {
+        printf("0x%02x ", output[i]);
+    }
+    putchar('\n');
+#endif
+
+    return LAZER_SUCCESS;
+}
+
+int lazer64_get_directorybasetable(process_info *target_process) {
+    if (NULL == target_process) {
+        LAZER_SETLASTERR("lazer64_get_directorybasetable()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ERROR;
+    }
+
+    
+    uintptr_t proc_dbt = driver_get_directorybasetable(target_process);
+    if (!LAZER_CHECK_ADDRESS(proc_dbt)) {
+        printf("[-] Unable to read DirectoryBaseTable address for PID %llu\n", target_process->process_id);
+        return LAZER_ERROR;
+    }
+
+    printf("[+] DirectoryBaseTable for PID %llu: 0x%02llx\n", target_process->process_id, proc_dbt);
+    return LAZER_SUCCESS;
+}
+
+int lazer64_getphysicaladdr_nonpaged(void) {
+    uintptr_t target_address = 0;
+
+    printf( "[!] This function retrieves physical address corresponding to a NON-PAGED virtual address\n"
+            "[*] Address: ");
+    fflush(stdout);
+    lazer64_get_numinput(&target_address, false, LAZER_INPUT_ADDRLEN);
+
+    if (!LAZER_CHECK_ADDRESS(target_address)) {
+        fprintf(stderr, "[-] Invalid address\n");
+        return LAZER_ERROR;
+    }
+
+    uint32_t low = 0;
+    int32_t  high = 0;
+    uint64_t quad = 0;
+
+    if (LAZER_SUCCESS != driver_mmgetphysicaladdress(target_address, &low, &high, &quad)) {
+        return LAZER_ERROR;
+    }
+
+    printf("[+] * LOW:  %#02lx\n"
+           "    * HIGH: %#02lx\n"
+           "    * QUAD: %#02llx\n",
+           low,
+           high,
+           quad
+    );
+
+    return LAZER_SUCCESS;
+}
+
 uint32_t lazer64_menu_input_handler(char *input) {
     if (NULL == input) {
         return LAZER_ERROR;
@@ -486,12 +561,16 @@ uint32_t lazer64_menu_input_handler(char *input) {
             lazer64_memrw(lazercfg->target_process, LAZER_MEMOP_READ, 0, NULL);
             break;
 
+        case 35:    /* read phys mem */
+            lazer64_phys();
+            break;
+
         /* --- Write Operations --- */
-        case 40:
+        case 40:    /* read memory */
             lazer64_memrw(lazercfg->target_process, LAZER_MEMOP_WRITE, 0, NULL);
             break;
-        
-        case 45:
+
+        case 46:    /* zero memory */
             lazer64_memrw(lazercfg->target_process, LAZER_MEMOP_WRITE, LAZER_FLAG_ZEROMEMORY, NULL);
             break;
 
@@ -500,7 +579,26 @@ uint32_t lazer64_menu_input_handler(char *input) {
             lazer64_ftox_calc();
             break;
 
+        case 72:
+            lazer64_getphysicaladdr_nonpaged();
+            break;
+
+        case 73:    /* get directorytablebase */
+            lazer64_get_directorybasetable(lazercfg->target_process);
+            break;
+
         /* eggz */
+        case 0xcc:
+            /* open physmem */
+            ; uint64_t open_status = STATUS_SUCCESS;
+            uint32_t exit_code = 0;
+            if (LAZER_SUCCESS == driver_open_physical_memory(&open_status, &exit_code)) {
+                printf("[+] Opened/Closed PhysicalMemory handle\n");
+            } else {
+                printf("[-] Status: %#02llx (%llu) CLOSE: %#02x\n", open_status, open_status, exit_code);
+            }
+            break;
+
         case 0x777:
             puts("*** CRACKED BY RAZOR1911 ***");
             break;

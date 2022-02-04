@@ -1,8 +1,7 @@
 #include "driverctl.h"
 
 #include <intrin.h>
-uintptr_t g_lazer_process_id	= WIN_PROCESSID_INVALID;
-HANDLE g_driver_handle			= DRIVER_HANDLE_UNINITIALIZED;
+
 GUID EFI_GUID					= { 0x31c0 };
 
 #ifdef __LAZER_DEBUG
@@ -175,23 +174,40 @@ uintptr_t GetKernelModuleAddress(char* module_name) {
 }
 
 bool driver_initialize(void) {
+    if (NULL == lazercfg) {
+        log_write(LOG_CRITICAL, "Process info for LAZER64 process has not been initialized");
+        return false;
+    }
+
     bool se_sysenv_enabled = false;
     uintptr_t result = 0;
     NTSTATUS status = STATUS_SUCCESS;
     uintptr_t ntoskrnl_address = 0;
+
+    /* ntoskrnl */
     uintptr_t pslprocbypid_address = 0;
     uintptr_t psgetbaseaddr_address = 0;
     uintptr_t mmcpvirtualmem_address = 0;
+    uintptr_t mmgetphysicaladdress_address = 0;
+    uintptr_t rtlinitunicodestring_address = 0;
+    uintptr_t zwopensection_address = 0;
+    uintptr_t zwclose_address = 0;
 
     byte ntoskrnl_exe[]		= "ntoskrnl.exe";
-    byte pslprocbypid[]		= "PsLookupProcessByProcessId";
-    byte psgetbaseaddr[]	= "PsGetProcessSectionBaseAddress";
-    byte mmcpvirtualmem[]	= "MmCopyVirtualMemory";
-    /* todo: .. physaddr ..*/
+    
+    /* ntoskrnl exports */
+    byte pslprocbypid[]		    = "PsLookupProcessByProcessId";
+    byte psgetbaseaddr[]	    = "PsGetProcessSectionBaseAddress";
+    byte mmcpvirtualmem[]	    = "MmCopyVirtualMemory";
+    byte mmgetphysicaladdress[] = "MmGetPhysicalAddress";
+    byte rtlinitunicodestring[] = "RtlInitUnicodeString";
+    byte zwopensection[]        = "ZwOpenSection";
+    byte zwclose[]              = "ZwClose";
+    
+
 
     memory_command cmd = { 0 };
-
-    g_lazer_process_id = GetCurrentProcessId();
+    lazercfg->lazer64_procinfo->process_id = GetCurrentProcessId();
 
     log_write(LOG_DEBUG, "Calling SetSystemEnvironmentPrivilege()..");
     status = SetSystemEnvironmentPrivilege(true, &se_sysenv_enabled);
@@ -203,18 +219,42 @@ bool driver_initialize(void) {
 
     log_write(LOG_DEBUG, "Retrieving '%s' address..", ntoskrnl_exe);
     ntoskrnl_address = GetKernelModuleAddress(ntoskrnl_exe);
-    log_write(LOG_DEBUG, "Got 'ntoskrnl.exe' address: %#02llx", ntoskrnl_address);
+    log_write(LOG_DEBUG, "Got '%s' address: %#02llx", ntoskrnl_exe, ntoskrnl_address);
 
-    log_write(LOG_DEBUG, "Exporting function addresses from '%s'..", ntoskrnl_exe);
+    if (!LAZER_CHECK_ADDRESS(ntoskrnl_address)) {
+        LAZER_SETLASTERR("driver_initialize()", LAZER_ERROR_INITINST, false);
+        return false;
+    }
+
     pslprocbypid_address = GetKernelModuleExport(ntoskrnl_address, pslprocbypid);
     psgetbaseaddr_address = GetKernelModuleExport(ntoskrnl_address, psgetbaseaddr);
     mmcpvirtualmem_address = GetKernelModuleExport(ntoskrnl_address, mmcpvirtualmem);
-    log_write(LOG_DEBUG, "Function addresses successfully exported from kernel");
+    mmgetphysicaladdress_address = GetKernelModuleExport(ntoskrnl_address, mmgetphysicaladdress);
+    rtlinitunicodestring_address = GetKernelModuleExport(ntoskrnl_address, rtlinitunicodestring);
+    zwopensection_address = GetKernelModuleExport(ntoskrnl_address, zwopensection);
+    zwclose_address = GetKernelModuleExport(ntoskrnl_address, zwclose);
+    log_write(LOG_DEBUG, "Function addresses exported from '%s'\n"
+              " [+] PsLookupProcessByProcessId()     = %#02llx\n"
+              " [+] PsGetProcessSectionBaseAddress() = %#02llx\n"
+              " [+] MmCopyVirtualMemory()            = %#02llx\n"
+              " [+] MmGetPhysicalAddress()           = %#02llx\n"
+              " [+] RtlInitUnicodeString()           = %#02llx\n"
+              " [+] ZwOpenSection()                  = %#02llx\n"
+              " [+] ZwClose()                        = %#02llx\n",
+              ntoskrnl_exe,
+              pslprocbypid_address, psgetbaseaddr_address,
+              mmcpvirtualmem_address, mmgetphysicaladdress_address,
+              rtlinitunicodestring_address, zwopensection_address, zwclose_address
+    );
 
     cmd.driver_operation = DRIVER_CMD_GETPROC;
     cmd.data[LAZER_DATA_SPEC_ADDREXPORT_0] = pslprocbypid_address;
     cmd.data[LAZER_DATA_SPEC_ADDREXPORT_1] = psgetbaseaddr_address;
     cmd.data[LAZER_DATA_SPEC_ADDREXPORT_2] = mmcpvirtualmem_address;
+    cmd.data[LAZER_DATA_SPEC_ADDREXPORT_3] = mmgetphysicaladdress_address;
+    cmd.data[LAZER_DATA_SPEC_ADDREXPORT_4] = rtlinitunicodestring_address;
+    cmd.data[LAZER_DATA_SPEC_ADDREXPORT_5] = zwopensection_address;
+    cmd.data[LAZER_DATA_SPEC_ADDREXPORT_6] = zwclose_address;
     cmd.data[LAZER_DATA_RESULT] = (uintptr_t) &result;
 
     status = driver_sendcommand(&cmd);
@@ -330,11 +370,16 @@ NTSTATUS driver_copy_memory(uint64_t dest_process_id, uintptr_t dest_address, ui
     );
 
     status = driver_sendcommand(&cmd);
-    if (NT_SUCCESS(status) && LAZER_SUCCESS == cmd.exit_status) {
+    if (!NT_SUCCESS(status)) {
+        LAZER_SETLASTERR("driver_copy_memory()", status, true);
         return (NTSTATUS) op_result;
     }
 
-    LAZER_SETLASTERR("driver_copy_memory()", status, true);
+    if (LAZER_SUCCESS != cmd.exit_status) {
+        LAZER_SETLASTERR("driver_copy_memory()", cmd.exit_status, false);
+        return cmd.exit_status;
+    }
+
     log_write(LOG_DEBUG, "EFI exit status: %u", cmd.exit_status);
     return status;
 }
@@ -364,11 +409,134 @@ uintptr_t driver_get_base_address(process_info* procinfo) {
         return LAZER_ADDRESS_INVALID;
     }
 
+    if (LAZER_SUCCESS != cmd.exit_status) {
+        LAZER_SETLASTERR("driver_get_base_address()", cmd.exit_status, false);
+        return LAZER_ADDRESS_INVALID;
+    }
+
     return procinfo->base_address;
 }
 
-uintptr_t driver_get_physical_address(process_info* procinfo, uintptr_t virtual_address) {
-    return 0x0;
+uintptr_t driver_get_directorybasetable(process_info *procinfo) {
+    if (NULL == procinfo) {
+        LAZER_SETLASTERR("driver_get_directorybasetable()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ERROR_NULLPTR;
+    }
+
+    NTSTATUS status = STATUS_SUCCESS;
+
+    memory_command cmd = { 0 };
+
+    cmd.driver_operation = DRIVER_CMD_GETDIRTABLEBASE;
+    cmd.data[LAZER_DATA_DEST_PROCID] = procinfo->process_id;
+    status = driver_sendcommand(&cmd);
+    
+    if (!NT_SUCCESS(status)) {
+        LAZER_SETLASTERR("driver_get_directorybasetable()", status, true);
+        return LAZER_ADDRESS_INVALID;
+    }
+
+    if (LAZER_SUCCESS != cmd.exit_status) {
+        LAZER_SETLASTERR("driver_get_directorybasetable()", cmd.exit_status, false);
+        return LAZER_ADDRESS_INVALID;
+    }
+
+    return cmd.data[LAZER_DATA_RESULT];
+}
+
+int driver_mmgetphysicaladdress(uintptr_t target_address, uint32_t *low, int32_t *high, uint64_t *quad) {
+    if (quad == NULL || high == NULL || low == NULL) {
+        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ERROR;
+    }
+
+    if (!LAZER_CHECK_ADDRESS(target_address)) {
+        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", EINVAL, false);
+        return LAZER_ERROR;
+    }
+
+    NTSTATUS status = STATUS_SUCCESS;
+    memory_command cmd = { 0 };
+
+    cmd.driver_operation = DRIVER_CMD_VTOPHYS_NONPAGED;
+    cmd.data[LAZER_DATA_SRC_ADDR] = target_address;
+
+    status = driver_sendcommand(&cmd);
+
+    if (!NT_SUCCESS(status)) {
+        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", status, true);
+        return LAZER_ERROR;
+    }
+
+    if (LAZER_SUCCESS != cmd.exit_status) {
+        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", cmd.exit_status, false);
+        return LAZER_ERROR;
+    }
+
+    *low  = (uint32_t) cmd.data[LAZER_DATA_RESULT_MISC_0];
+    *high = (int32_t)  cmd.data[LAZER_DATA_RESULT_MISC_1];
+    *quad = cmd.data[LAZER_DATA_RESULT_MISC_2];
+
+    return LAZER_SUCCESS;
+}
+
+NTSTATUS driver_read_phys_memory(byte *output, uintptr_t target_phys_addr, size_t nbytes) {
+    if (NULL == output) {
+        LAZER_SETLASTERR("driver_read_phys_memory()", LAZER_ERROR_NULLPTR, false);
+        return LAZER_ERROR;
+    }
+
+    if (!LAZER_CHECK_ADDRESS(target_phys_addr) || nbytes == 0 || nbytes > 64) {
+        LAZER_SETLASTERR("driver_read_phys_memory()", EINVAL, false);
+        return LAZER_ERROR;
+    }
+
+    NTSTATUS status = STATUS_SUCCESS;
+    memory_command cmd = { 0 };
+
+    cmd.driver_operation = DRIVER_CMD_READPHYSMEM;
+    cmd.data[LAZER_DATA_SRC_ADDR] = target_phys_addr;
+    cmd.data[LAZER_DATA_SIZE] = nbytes;
+
+    status = driver_sendcommand(&cmd);
+
+    if (!NT_SUCCESS(status)) {
+        LAZER_SETLASTERR("driver_read_phys_memory()", status, true);
+        return status;
+    }
+
+    if (LAZER_SUCCESS != cmd.exit_status) {
+        LAZER_SETLASTERR("driver_read_phys_memory()", cmd.exit_status, false);
+        return LAZER_ERROR;
+    }
+
+    memcpy(output, cmd.byte_data, nbytes);
+
+    return LAZER_SUCCESS;
+}
+
+NTSTATUS driver_open_physical_memory(uint64_t *ret_status, uint32_t *exit_code) {
+    NTSTATUS status = STATUS_SUCCESS;
+    
+    memory_command cmd = { 0 };
+    cmd.driver_operation = DRIVER_CMD_DEBUGOP;
+    
+    status = driver_sendcommand(&cmd);
+
+    *ret_status = cmd.data[LAZER_DATA_RESULT];
+    *exit_code = cmd.exit_status;
+
+    if (!NT_SUCCESS(status)) {
+        LAZER_SETLASTERR("driver_read_phys_memory()", status, true);
+        return status;
+    }
+
+    if (LAZER_SUCCESS != cmd.exit_status) {
+        LAZER_SETLASTERR("driver_read_phys_memory()", cmd.exit_status, false);
+        return LAZER_ERROR;
+    }
+
+    return LAZER_SUCCESS;
 }
 
 NTSTATUS driver_read_memory(process_info* procinfo, uintptr_t address, byte *outbuf, size_t size) {
@@ -376,7 +544,7 @@ NTSTATUS driver_read_memory(process_info* procinfo, uintptr_t address, byte *out
         LAZER_SETLASTERR("driver_read_memory()", LAZER_ERROR_NULLPTR, false);
         return LAZER_ERROR_NULLPTR; 
     }
-    return driver_copy_memory(g_lazer_process_id, (uintptr_t) outbuf, procinfo->process_id, address, size);
+    return driver_copy_memory(lazercfg->lazer64_procinfo->process_id, (uintptr_t) outbuf, procinfo->process_id, address, size);
 }
 
 NTSTATUS driver_write_memory(process_info* procinfo, uintptr_t address, byte* inputbuf, size_t size) {
@@ -384,5 +552,5 @@ NTSTATUS driver_write_memory(process_info* procinfo, uintptr_t address, byte* in
         LAZER_SETLASTERR("driver_write_memory()", LAZER_ERROR_NULLPTR, false);
         return LAZER_ERROR_NULLPTR; 
     }
-    return driver_copy_memory(procinfo->process_id, address, g_lazer_process_id, (uintptr_t) inputbuf, size);
+    return driver_copy_memory(procinfo->process_id, address, lazercfg->lazer64_procinfo->process_id, (uintptr_t) inputbuf, size);
 }

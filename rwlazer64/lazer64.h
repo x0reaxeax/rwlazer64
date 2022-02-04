@@ -10,8 +10,10 @@
 #define RWLAZER_VERSION_MINOR	32
 #define RWLAZER_VERSION_BUILD	3020
 
-#define LAZER_RETURN_SUCCESS    EXIT_SUCCESS
-#define LAZER_SUCCESS			LAZER_RETURN_SUCCESS
+#define LAZER_ERROR				EXIT_FAILURE
+#define LAZER_SUCCESS			EXIT_SUCCESS
+#define LAZER_RETURN_SUCCESS    LAZER_SUCCESS
+#define LAZER_RETURN_FAILURE    LAZER_ERROR
 
 #define LAZER_JMPINTRO          0x6FFF
 
@@ -28,7 +30,9 @@
 #define LAZER_ERROR_CONVERSION      0x7009
 #define LAZER_ERROR_ATTACHBUSY      0x700A
 #define LAZER_ERROR_OUTBOUNDS       0x700B
-#define _LAZER_ERROR_BARRIER        0x700C
+#define LAZER_ERROR_EINVAL          0x700C
+#define LAZER_ERROR_EINVOP          0x700D
+#define _LAZER_ERROR_BARRIER        0x700E
 
 /* memory_command data indexes */
 /* General */
@@ -39,7 +43,7 @@
 #define LAZER_DATA_SIZE             4
 #define LAZER_DATA_RESULT           5
 
-/* Dest process misc (EFI driver is marked as DEST) */
+/* Dest process misc (EFI driver is marked as DEST too) */
 #define LAZER_DATA_DEST_MISC_0      6
 #define LAZER_DATA_DEST_MISC_1      7
 #define LAZER_DATA_DEST_MISC_2      8
@@ -57,12 +61,14 @@
 /* Misc Misc xD */
 #define LAZER_DATA_MISC_0          15
 
-#define LAZER_DATA_SPEC_ADDREXPORT_0   LAZER_DATA_SRC_MISC_0
-#define LAZER_DATA_SPEC_ADDREXPORT_1   LAZER_DATA_SRC_MISC_1
-#define LAZER_DATA_SPEC_ADDREXPORT_2   LAZER_DATA_SRC_MISC_2
-#define LAZER_DATA_SPEC_ADDREXPORT_3   LAZER_DATA_DEST_MISC_0   /* destination addresses can be used here, */
-#define LAZER_DATA_SPEC_ADDREXPORT_4   LAZER_DATA_DEST_MISC_1   /* since the destination buffers are unused */
-#define LAZER_DATA_SPEC_ADDREXPORT_5   LAZER_DATA_DEST_MISC_2
+#define LAZER_DATA_SPEC_ADDREXPORT_0    16
+#define LAZER_DATA_SPEC_ADDREXPORT_1    17
+#define LAZER_DATA_SPEC_ADDREXPORT_2    18
+#define LAZER_DATA_SPEC_ADDREXPORT_3    19
+#define LAZER_DATA_SPEC_ADDREXPORT_4    20
+#define LAZER_DATA_SPEC_ADDREXPORT_5    21
+#define LAZER_DATA_SPEC_ADDREXPORT_6    22
+#define LAZER_DATA_SPEC_ADDREXPORT_7    23
 
 #define LAZER_DATA_SPEC_WRMSR_MSRID    LAZER_DATA_SRC_MISC_0
 #define LAZER_DATA_SPEC_WRMSR_LOW32    LAZER_DATA_SRC_MISC_1
@@ -79,7 +85,12 @@ typedef enum _lazer_eficommand {
     LAZER_RDMSR     = 0x320,
     LAZER_WRMSR     = 0x330,
     LAZER_MEMCPY    = 0x340,
-    LAZER_PHYSADDR  = 0x350
+    LAZER_PHYSADDR  = 0x350,
+    LAZER_READPHYS  = 0x360,
+    LAZER_WRITEPHYS = 0x370,
+    LAZER_VTOPNONPG = 0x380,
+    LAZER_DIRTBLBASE= 0x390,
+    LAZER_DEBUGOP   = 0x400
 } lazercmd_t;
 
 #ifdef _WIN32
@@ -109,7 +120,6 @@ typedef enum _lazer_eficommand {
 #define LAZER_LOG_PATH			"lazer64.log"
 
 #define LAZER_CONTINUE			LAZER_SUCCESS
-#define LAZER_ERROR				EXIT_FAILURE
 #define LAZER_EXIT				((uint32_t) (EXIT_SUCCESS - 1))
 
 #define LAZER_INPUT_ADDRLEN     ( 24 )    /* UINT64_MAX = 20 decimal characters + "0x", newline and nullterm */
@@ -197,6 +207,12 @@ typedef struct lazer_op_history {
     /* ... */
 } lazer64_oplog;
 
+typedef struct lazer_multi_bytedata {
+    uint64_t low;
+    uint64_t high;
+    byte bytedata[16];
+} lazer64_multidata;
+
 typedef struct lazer_settings {
     int32_t         confirm_messages;           /* display confirmation messages 0 = no, 1 = yes */
     int32_t			exit_code;					/* LAZER exit code */
@@ -252,7 +268,7 @@ ssize_t log_write(loglevel_t log_level, const char* message, ...);
         char *__str_err = (char *) lazer_strerror(LAZER_READLASTERR, (bool) is_nt_error); \
         __str_err = (NULL == __str_err) ? "UNKNOWN_ERROR" : __str_err; \
         char *nt_flag = (is_nt_error) ? "[NT] " : ""; \
-        log_write(LOG_ERROR, "%s%s: %s", nt_flag, func_name, __str_err); \
+        log_write(LOG_ERROR, "%s%s: %s [%#02lx]", nt_flag, func_name, __str_err, LAZER_READLASTERR); \
         if (is_nt_error && NULL != __str_err) { free(__str_err); } \
      } while (0); \
 }
@@ -304,6 +320,7 @@ size_t strtodtsz(char *str_type, bool print_info_only);
 int lazer64_get_numinput(uint64_t *output, bool str_datasz_input, size_t nbytes);
 int lazer64_get_bytedata(byte *output, size_t nbytes);
 bool check_data_size(size_t data_size);
+void lazer64_prompt_address(uintptr_t *addr_output);
 
 /* Visuals */
 void printeye(void);

@@ -107,10 +107,10 @@ void print_intro(void) {
            "|  1 | Get base address         | 31 | Read process info        | 41 | Alter process info       | 51 | Signature scanner        | Last read value:         |\n"
            "|  2 | Print data type chart    | 32 | Read string              | 42 | Write string             | 60 | Float <-> Hex calculator | Last write address:      |\n"
            "|  3 | Print this menu          | 33 | Read from last address   | 43 | Write to last address    | 61 | Base calculator          | Last write value:        |\n"
-           "|  4 | Clear history            | 34 | Read MSR                 | 44 | Write MSR                |    |                          | Last calculator result:  |\n"
-           "|  5 | Clear console            |    |                          | 45 | Zero memory              |    |                          |                          |\n"
-           "|  6 | Fresh start              |    |                          | 46 | Freeze value             |    |                          |                          |\n"
-           "| 99 | Exit                     |    |                          |    |                          |    |                          |                          |\n"
+           "|  4 | Clear history            | 34 | Read MSR                 | 44 | Write MSR                | 72 | MmGetPhysicalAddress()   | Last calculator result:  |\n"
+           "|  5 | Clear console            | 35 | Read physical memory     | 45 | Write to physical memory | 73 | Get DirectoryTableBase   |                          |\n"
+           "|  6 | Fresh start              |    |                          | 46 | Zero memory              |    |                          |                          |\n"
+           "| 99 | Exit                     |    |                          | 47 | Freeze value             | CC | Debug [OpenPhysicalMem]  |                          |\n"
            "------------------------------------------------------------------------------------------------------------------------------------------------------------\n"
     );
 

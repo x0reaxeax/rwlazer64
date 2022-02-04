@@ -299,6 +299,17 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
     return retcode;
 }
 
+void lazer64_prompt_address(uintptr_t *addr_output) {
+    if (NULL == addr_output) {
+        LAZER_SETLASTERR("lazer64_prompt_address()", LAZER_ERROR_NULLPTR, false);
+        return;
+    }
+
+    printf("[*] Address: ");
+    fflush(stdout);
+    lazer64_get_numinput(addr_output, false, LAZER_INPUT_ADDRLEN);
+}
+
 void lazer64_ftox_calc(void) {
     char fs_input[256] = { 0 };
 
