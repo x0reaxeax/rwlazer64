@@ -8,7 +8,7 @@
 */
 size_t strtodtsz(char* str_type, bool print_info_only) {
     if (NULL == str_type && !(print_info_only)) { 
-        LAZER_SETLASTERR("strtodtsz()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("strtodtsz()", LAZER_ERROR_NULLPTR, false, true);
         return 0; 
     }
     
@@ -103,7 +103,7 @@ bool check_data_size(size_t data_size) {
 
 bool check_hex_input_lookup(byte *str) {
     if (NULL == str) { 
-        LAZER_SETLASTERR("check_hex_input_fast()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("check_hex_input_fast()", LAZER_ERROR_NULLPTR, false, true);
         return false; 
     }
 
@@ -126,7 +126,7 @@ bool check_hex_input_lookup(byte *str) {
 
 bool check_hex_input(byte *str) {
     if (NULL == str) {
-        LAZER_SETLASTERR("check_hex_input()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("check_hex_input()", LAZER_ERROR_NULLPTR, false, true);
         return false;
     }
 
@@ -140,6 +140,47 @@ bool check_hex_input(byte *str) {
     return true;
 }
 
+unsigned int int_ndigits (uint64_t number, numbase_t base) {
+    
+    switch (base) {
+        
+        case BASE_DECIMAL:
+            if (number < 10) return 1;
+            if (number < 100) return 2;
+            if (number < 1000) return 3;
+            if (number < 10000) return 4;
+            if (number < 100000) return 5;
+            if (number < 1000000) return 6;
+            if (number < 10000000) return 7;
+            if (number < 100000000) return 8;
+            if (number < 1000000000) return 9;
+            if (number < 10000000000) return 10;
+            if (number < 100000000000) return 11;
+            if (number < 1000000000000) return 12;
+            if (number < 10000000000000) return 13;
+            if (number < 100000000000000) return 14;
+            if (number < 1000000000000000) return 15;
+            if (number < 10000000000000000) return 16;
+            if (number < 100000000000000000) return 17;
+            if (number < 1000000000000000000) return 18;
+            if (number < 10000000000000000000) return 19;
+            return 20;
+
+            break;
+
+        case BASE_HEXADECIMAL:
+            ; char strhex[32] = { 0 };
+            snprintf(strhex, sizeof(strhex), "%llx", number);
+            return (unsigned int) strlen(strhex);
+            break;
+        
+        
+        default:
+            break;
+    }
+
+    return 0;
+}
 
 numbase_t strtou64(byte* input_buf, uintptr_t* output) {
     if (NULL == input_buf || NULL == output) {
@@ -179,7 +220,7 @@ int lazer64_get_numinput(uint64_t *output, bool str_datasz_input, size_t nbytes)
     uint64_t result = 0;
     char *input_buffer = malloc(sizeof(char) * nbytes + 2); /* 0x prefix */
     if (NULL == input_buffer) {
-        LAZER_SETLASTERR("lazer64_get_numinput()", errno, false);
+        lazer64_setlasterr("lazer64_get_numinput()", errno, false, true);
         return LAZER_ERROR;
     }
 
@@ -211,12 +252,12 @@ int lazer64_get_strdata(process_info *target_process, byte *output, uintptr_t ad
 
 int lazer64_get_bytedata(byte *output, size_t nbytes) {
     if (NULL == output) {
-        LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("lazer64_get_bytedata()", LAZER_ERROR_NULLPTR, false, true);
         return LAZER_ERROR;
     }
 
     if (nbytes > (LAZER_BYTEDATA_MAXLEN - 1) || 0 == nbytes) {
-        LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_OUTBOUNDS, false);
+        lazer64_setlasterr("lazer64_get_bytedata()", LAZER_ERROR_OUTBOUNDS, false, true);
         return LAZER_ERROR;
     }
 
@@ -229,7 +270,7 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
     int retcode = LAZER_SUCCESS;
     char *input_data = malloc(sizeof(char) * LAZER_BYTEDATA_MAXLEN);
     if (NULL == input_data) {
-        LAZER_SETLASTERR("lazer64_get_bytedata()", errno, false);
+        lazer64_setlasterr("lazer64_get_bytedata()", errno, false, true);
         return LAZER_ERROR;
     }
 
@@ -279,7 +320,7 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
         cpy_diff = (uintptr_t) endptr - ((uintptr_t) byte_to_convert);
         
         if (cpy_diff > pad) {
-            LAZER_SETLASTERR("lazer64_get_bytedata()", LAZER_ERROR_CONVERSION, false);
+            lazer64_setlasterr("lazer64_get_bytedata()", LAZER_ERROR_CONVERSION, false, false);
             retcode = LAZER_ERROR;
             break;
         }
@@ -301,7 +342,7 @@ int lazer64_get_bytedata(byte *output, size_t nbytes) {
 
 void lazer64_prompt_address(uintptr_t *addr_output) {
     if (NULL == addr_output) {
-        LAZER_SETLASTERR("lazer64_prompt_address()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("lazer64_prompt_address()", LAZER_ERROR_NULLPTR, false, true);
         return;
     }
 
@@ -324,5 +365,7 @@ void lazer64_ftox_calc(void) {
         uint64_t uxval;
     } f2u64 = { .fpval = input };
 
-    printf("[+] F2X: %f -> %#04llx\n", input, f2u64.uxval);
+    printf("[+] F2X: %f -> 0x%llx\n", input, f2u64.uxval);
+    memset(&lazercfg->operation_history->last_calculator_result, 0, sizeof(lazercfg->operation_history->last_calculator_result));
+    memcpy(&lazercfg->operation_history->last_calculator_result, &f2u64.uxval, sizeof(f2u64.uxval));
 }

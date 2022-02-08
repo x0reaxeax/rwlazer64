@@ -7,8 +7,8 @@
 #endif
 
 #define RWLAZER_VERSION_MAJOR	0
-#define RWLAZER_VERSION_MINOR	32
-#define RWLAZER_VERSION_BUILD	3020
+#define RWLAZER_VERSION_MINOR	33
+#define RWLAZER_VERSION_BUILD	3031
 
 #define LAZER_ERROR				EXIT_FAILURE
 #define LAZER_SUCCESS			EXIT_SUCCESS
@@ -203,7 +203,10 @@ typedef struct proc_info {
 
 typedef struct lazer_op_history {
     uintptr_t   last_read_address;
+    uintptr_t   last_read_value;
     uintptr_t   last_write_address;
+    uintptr_t   last_write_value;
+    uintptr_t   last_calculator_result;
     /* ... */
 } lazer64_oplog;
 
@@ -250,29 +253,6 @@ ssize_t log_write(loglevel_t log_level, const char* message, ...);
 
 /* Reads last error value */
 #define LAZER_READLASTERR       ( lazercfg->last_errno )
-
-/** this is a straight shit show, so lemme walk you thru..
-* first, we set `last_errno` in lazercfg to the error code this macro was called with
-* next `exit_code` is set to `LAZER_ERROR`, to indicate an error just happened
-* following, we check if `lazer_strerror()` returns `NULL`. if so, we yell "UNKNOWN_ERROR"
-* and last, we want to check if current error was a winapi error, because `lazer_strerror()`
-* calls `malloc()` in this case, so we need to free that..
-*
-*/
-
-/* Sets last error number and logs error information */
-#define LAZER_SETLASTERR(func_name, lazer_errno, is_nt_error) { \
-    do { \
-        lazercfg->last_errno = lazer_errno; \
-        lazercfg->exit_code = LAZER_ERROR; \
-        char *__str_err = (char *) lazer_strerror(LAZER_READLASTERR, (bool) is_nt_error); \
-        __str_err = (NULL == __str_err) ? "UNKNOWN_ERROR" : __str_err; \
-        char *nt_flag = (is_nt_error) ? "[NT] " : ""; \
-        log_write(LOG_ERROR, "%s%s: %s [%#02lx]", nt_flag, func_name, __str_err, LAZER_READLASTERR); \
-        if (is_nt_error && NULL != __str_err) { free(__str_err); } \
-     } while (0); \
-}
-
 
 /* Lazer CTL */
 
@@ -321,6 +301,8 @@ int lazer64_get_numinput(uint64_t *output, bool str_datasz_input, size_t nbytes)
 int lazer64_get_bytedata(byte *output, size_t nbytes);
 bool check_data_size(size_t data_size);
 void lazer64_prompt_address(uintptr_t *addr_output);
+unsigned int int_ndigits (uint64_t number, numbase_t base);
+void lazer64_setlasterr(char *func_name, error_t lazer_errno, bool is_nt_error, bool is_fatal);
 
 /* Visuals */
 void printeye(void);

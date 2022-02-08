@@ -7,7 +7,7 @@
 
 static argid_t lazer64_strargid(const char *input) {
     if (NULL == input) {
-        LAZER_SETLASTERR("lazer64_strargid()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("lazer64_strargid()", LAZER_ERROR_NULLPTR, false, true);
         return LAZER_ARG_NULL;
     }
 
@@ -115,7 +115,7 @@ int lazer64_init(int argc, const char **argv) {
     h_console = GetStdHandle(STD_OUTPUT_HANDLE);
 
     if (NULL == h_console) {
-        LAZER_SETLASTERR("lazer64_init()", GetLastError(), true);
+        lazer64_setlasterr("lazer64_init()", GetLastError(), true, true);
         goto LAZER_INIT_FAIL;
     }
 
@@ -124,18 +124,18 @@ int lazer64_init(int argc, const char **argv) {
     if (GetConsoleScreenBufferInfo(h_console, &csbi)) {
         lazercfg->default_console_attr = csbi.wAttributes;
     } else {
-        LAZER_SETLASTERR("lazer64_init()", GetLastError(), true);
+        lazer64_setlasterr("lazer64_init()", GetLastError(), true, true);
     }
 
     SetConsoleTextAttribute(h_console, COLOR_RED);
 
     if (driver_initialize() != true) {
-        LAZER_SETLASTERR("lazer64_init()", LAZER_ERROR_EFICOMM, false);
+        lazer64_setlasterr("lazer64_init()", LAZER_ERROR_EFICOMM, false, true);
         goto LAZER_INIT_FAIL;
     }
 
     if (driver_checkefi(lazerinfo) != true) {
-        LAZER_SETLASTERR("lazer64_init()", LAZER_ERROR_INITINST, false);
+        lazer64_setlasterr("lazer64_init()", LAZER_ERROR_INITINST, false, true);
         goto LAZER_INIT_FAIL;
     }
 
@@ -157,7 +157,7 @@ int32_t lazer64_final(error_t exit_code) {
         /* check if default command line text color has been saved and if so, restore it */
         if (lazercfg->default_console_attr) {
             if (!SetConsoleTextAttribute(lazercfg->h_console, lazercfg->default_console_attr)) {
-                LAZER_SETLASTERR("lazer64_final()", GetLastError(), true);
+                lazer64_setlasterr("lazer64_final()", GetLastError(), true, true);
             }
         }
 
@@ -183,6 +183,18 @@ int32_t lazer64_final(error_t exit_code) {
     return exit_code;
 }
 
+static inline lbool lazer64_checktarget(process_info *target_process) {
+    if (NULL == target_process) {
+        return LAZER_FALSE;
+    }
+
+    if (target_process->process_id == WIN_PROCESSID_INVALID) {
+        return LAZER_FALSE;
+    }
+
+    return LAZER_TRUE;
+}
+
 void lazer64_restart(void) {
     if (NULL != lazercfg) {
         if (NULL != lazercfg->target_process) {
@@ -202,11 +214,16 @@ int lazer64_attach(process_info *target_process) {
         if (NULL == lazercfg->target_process) {
             target_process = malloc(sizeof(process_info));
             if (NULL == target_process) {
-                LAZER_SETLASTERR("lazer64_attach()", errno, false);
+                lazer64_setlasterr("lazer64_attach()", errno, false, true);
                 return LAZER_ERROR;
             }
         } else {
-            LAZER_SETLASTERR("lazer64_attach()", LAZER_ERROR_ATTACHBUSY, false);
+            lazer64_setlasterr("lazer64_attach()", LAZER_ERROR_ATTACHBUSY, false, false);
+            return LAZER_ERROR;
+        }
+    } else {
+        if ((target_process->process_id != WIN_PROCESSID_INVALID) && (target_process == lazercfg->target_process)) {
+            lazer64_setlasterr("lazer64_attach()", LAZER_ERROR_ATTACHBUSY, false, false);
             return LAZER_ERROR;
         }
     }
@@ -220,7 +237,7 @@ int lazer64_attach(process_info *target_process) {
     }
 
     if (WIN_PROCESSID_INVALID == target_pid) {
-        LAZER_SETLASTERR("lazer64_attach()", EINVAL, false);
+        lazer64_setlasterr("lazer64_attach()", EINVAL, false, true);
         goto _ERROR;
     }
 
@@ -242,7 +259,7 @@ _ERROR:
 
 static size_t lazer64_mem_write(process_info *target_process, uintptr_t target_address, byte *force_write_byte_buf, size_t nbytes) {
     if (NULL == target_process) {
-        LAZER_SETLASTERR("lazer64_mem_write()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("lazer64_mem_write()", LAZER_ERROR_NULLPTR, false, true);
         return 0;
     }
 
@@ -254,7 +271,7 @@ static size_t lazer64_mem_write(process_info *target_process, uintptr_t target_a
         write_byte_buf = malloc(sizeof(byte) * nbytes);
 
         if (NULL == write_byte_buf) {
-            LAZER_SETLASTERR("lazer64_mem_write()", errno, false);
+            lazer64_setlasterr("lazer64_mem_write()", errno, false, true);
             return 0;
         }
         
@@ -296,6 +313,10 @@ static size_t lazer64_mem_write(process_info *target_process, uintptr_t target_a
         nbytes = 0;
     }
 
+    size_t last_write_sz = (nbytes <= sizeof(int)) ? sizeof(int) : sizeof(uint64_t);
+    memset(&lazercfg->operation_history->last_write_value, 0, sizeof(lazercfg->operation_history->last_write_value));
+    memcpy(&lazercfg->operation_history->last_write_value, write_byte_buf, last_write_sz);
+
 _FINAL:
     if (NULL == force_write_byte_buf) {
         free(write_byte_buf);
@@ -305,7 +326,7 @@ _FINAL:
 
 static size_t lazer64_mem_read(process_info *target_process, uintptr_t target_address, byte *force_read_byte_buf, size_t nbytes, bool quiet) {
     if (NULL == target_process) {
-        LAZER_SETLASTERR("lazer64_mem_read()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("lazer64_mem_read()", LAZER_ERROR_NULLPTR, false, true);
         return 0;
     }
 
@@ -316,7 +337,7 @@ static size_t lazer64_mem_read(process_info *target_process, uintptr_t target_ad
         read_byte_buf = malloc(sizeof(byte) * nbytes);
         
         if (NULL == read_byte_buf) {
-            LAZER_SETLASTERR("lazer64_mem_read()", errno, false);
+            lazer64_setlasterr("lazer64_mem_read()", errno, false, true);
             return 0;
         }
         
@@ -342,7 +363,11 @@ static size_t lazer64_mem_read(process_info *target_process, uintptr_t target_ad
         }
         putchar('\n');
     }
-
+    
+    size_t last_read_sz = (nbytes <= sizeof(int)) ? sizeof(int) : ( (nbytes <= sizeof(uint64_t)) ? nbytes : sizeof(uint64_t));
+    memset(&lazercfg->operation_history->last_read_value, 0, sizeof(lazercfg->operation_history->last_read_value));
+    memcpy(&lazercfg->operation_history->last_read_value, read_byte_buf, last_read_sz);
+    
     if (NULL == force_read_byte_buf) {
         free(read_byte_buf);
     }
@@ -351,8 +376,8 @@ static size_t lazer64_mem_read(process_info *target_process, uintptr_t target_ad
 
 
 int lazer64_memrw(process_info *target_process, lazer64_memop memop, uint8_t flags, size_t *szout) {
-    if (NULL == target_process) {
-        LAZER_SETLASTERR("lazer64_memrw()", LAZER_ERROR_NULLPTR, false);
+    if (!lazer64_checktarget(target_process)) {
+        lazer64_setlasterr("lazer64_memrw()", LAZER_ERROR_NOPROC, false, false);
         fprintf(stderr, "[-] No target process set\n");
         return LAZER_ERROR;
     }
@@ -386,16 +411,18 @@ int lazer64_memrw(process_info *target_process, lazer64_memop memop, uint8_t fla
 
     switch (memop) {
         case LAZER_MEMOP_READ:
-            ; bool quiet = (flags == (memop | LAZER_FLAG_EXTREAD)) ? true : false;
+            lazercfg->operation_history->last_read_address = target_address;
+            bool quiet = (flags == (memop | LAZER_FLAG_EXTREAD)) ? true : false;
             affected_bytes = lazer64_mem_read(target_process, target_address, NULL, nbytes, quiet);
             break;
 
         case LAZER_MEMOP_WRITE:
-            ; byte *byte_buf = NULL;
+            lazercfg->operation_history->last_write_address = target_address;
+            byte *byte_buf = NULL;
             if ((flags & (LAZER_FLAG_ZEROMEMORY)) > 0) {
                 byte_buf = malloc(sizeof(byte) * nbytes);
                 if (NULL == byte_buf) {
-                    LAZER_SETLASTERR("lazer64_memrw()", errno, false);
+                    lazer64_setlasterr("lazer64_memrw()", errno, false, true);
                     return 0;
                 }
 
@@ -406,7 +433,7 @@ int lazer64_memrw(process_info *target_process, lazer64_memop memop, uint8_t fla
             break;
 
         default:
-            LAZER_SETLASTERR("lazer64_memrw()", EINVAL, false);
+            lazer64_setlasterr("lazer64_memrw()", EINVAL, false, true);
             ret_code = LAZER_ERROR;
             break;
     }
@@ -441,8 +468,9 @@ int lazer64_phys(void) {
 }
 
 int lazer64_get_directorybasetable(process_info *target_process) {
-    if (NULL == target_process) {
-        LAZER_SETLASTERR("lazer64_get_directorybasetable()", LAZER_ERROR_NULLPTR, false);
+    if (!lazer64_checktarget(target_process)) {
+        lazer64_setlasterr("lazer64_get_directorybasetable()", LAZER_ERROR_NOPROC, false, false);
+        fprintf(stderr, "[-] No target process set\n");
         return LAZER_ERROR;
     }
 
@@ -505,7 +533,7 @@ uint32_t lazer64_menu_input_handler(char *input) {
         /* --- Generic Ops --- */
         case 0:
             /* set target pid */
-            if (lazer64_attach(NULL) != LAZER_SUCCESS) {
+            if (lazer64_attach(lazercfg->target_process) != LAZER_SUCCESS) {
                 if (LAZER_READLASTERR == LAZER_ERROR_ATTACHBUSY) {
                     fprintf(stderr, "[-] Target process already set!\n");
                 } else {
@@ -519,7 +547,7 @@ uint32_t lazer64_menu_input_handler(char *input) {
         case 1:
             /* get base address */
             if (!LAZER_CHECK_ADDRESS(driver_get_base_address(lazercfg->target_process))) {
-                fprintf(stderr, "[-] Unable to retrieve base address: E%#02x\n", LAZER_READLASTERR);
+                fprintf(stderr, "[-] Unable to retrieve base address: E 0x%x\n", LAZER_READLASTERR);
             } else {
                 printf("[+] Target base address: %#02llx\n", lazercfg->target_process->base_address);
             }
@@ -647,7 +675,7 @@ int lazer64_menu(lbool display_logo) {
         fflush(stdout);
     }
     if (LAZER_JMPINTRO == return_value) {
-        lazer64_menu(LAZER_FALSE);
+        return_value = lazer64_menu(LAZER_FALSE);
     }
 
     return (return_value == LAZER_EXIT) ? LAZER_SUCCESS : LAZER_ERROR;

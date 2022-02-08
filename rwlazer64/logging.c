@@ -154,3 +154,25 @@ const char* lazer_strerror(error_t error_num, bool is_nt_error) {
 
     return error_str;
 }
+
+void lazer64_setlasterr(char *func_name, error_t lazer_errno, bool is_nt_error, bool is_fatal) {
+    char *str_error = NULL, *function_name = NULL, *nt_flag = NULL;
+    
+    function_name = (NULL == func_name) ? "UNKNOWN_FUNCTION" : func_name;
+    
+    lazercfg->last_errno = lazer_errno;
+    
+    if (is_fatal) {
+        lazercfg->exit_code = LAZER_ERROR;
+    }
+
+    str_error = (char *) lazer_strerror(LAZER_READLASTERR, (bool) is_nt_error);
+    str_error = (NULL == str_error) ? "UNKNOWN_ERROR" : str_error;
+    nt_flag = (is_nt_error) ? "[NT] " : "";
+
+    log_write(LOG_ERROR, "%s%s: %s [%#02lx]", nt_flag, func_name, str_error, LAZER_READLASTERR);
+    if (is_nt_error) {
+        /* lazer_strerror mallocs for NT errors */
+        free(str_error);
+    }
+}

@@ -70,7 +70,7 @@ void print_intro(void) {
         if (lazercfg->target_process->process_id != WIN_PROCESSID_INVALID) {
             char base_addr_info[64] = { 0 };
             if (LAZER_CHECK_ADDRESS(lazercfg->target_process->base_address)) {
-                snprintf(base_addr_info, 64, "  * Target Base Address: %#02llx", lazercfg->target_process->base_address);
+                snprintf(base_addr_info, 64, "  * Target Base Address: %#02llx\n", lazercfg->target_process->base_address);
             }
             snprintf(target_process_info, 128, "  * Target PID: %llu [%#02llx]\n%s\n",
                      lazercfg->target_process->process_id,
@@ -80,6 +80,10 @@ void print_intro(void) {
         }
     }
 
+    size_t space_indent = 35;
+    char format_spaces[5][48] = { 0 };
+    size_t n_formats = sizeof(lazer64_oplog) / sizeof(uintptr_t);
+    uintptr_t *oplog_entry = (uintptr_t *) lazercfg->operation_history;
     char lazer_baddr[LAZER_ADDRLEN_HEX] = { 0 };
     if (LAZER_CHECK_ADDRESS(lazercfg->lazer64_procinfo->base_address)) {
         snprintf(lazer_baddr, LAZER_ADDRLEN_HEX, "%#02llx", lazercfg->lazer64_procinfo->base_address);
@@ -99,23 +103,49 @@ void print_intro(void) {
            target_process_info
     );
 
+    for (size_t i = 0; i < n_formats; i++) {
+        size_t indent = space_indent - int_ndigits(*oplog_entry, BASE_HEXADECIMAL);
+        memset(format_spaces[i], ' ', indent);
+        oplog_entry++;
+    }
+
     printf("\n"
-           "------------------------------------------------------------------------------------------------------------------------------------------------------------\n"
-           "| OP | Generic operations       | OP | Read Operations          | OP | Write Operations         | OP | Misc Tools               | Information              |\n"
-           "|____|__________________________|____|__________________________|____|__________________________|____|__________________________|__________________________|\n"
-           "|  0 | Set target process       | 30 | Read memory              | 40 | Write memory             | 50 | Memory scanner           | Last read address:       |\n"
-           "|  1 | Get base address         | 31 | Read process info        | 41 | Alter process info       | 51 | Signature scanner        | Last read value:         |\n"
-           "|  2 | Print data type chart    | 32 | Read string              | 42 | Write string             | 60 | Float <-> Hex calculator | Last write address:      |\n"
-           "|  3 | Print this menu          | 33 | Read from last address   | 43 | Write to last address    | 61 | Base calculator          | Last write value:        |\n"
-           "|  4 | Clear history            | 34 | Read MSR                 | 44 | Write MSR                | 72 | MmGetPhysicalAddress()   | Last calculator result:  |\n"
-           "|  5 | Clear console            | 35 | Read physical memory     | 45 | Write to physical memory | 73 | Get DirectoryTableBase   |                          |\n"
-           "|  6 | Fresh start              |    |                          | 46 | Zero memory              |    |                          |                          |\n"
-           "| 99 | Exit                     |    |                          | 47 | Freeze value             | CC | Debug [OpenPhysicalMem]  |                          |\n"
-           "------------------------------------------------------------------------------------------------------------------------------------------------------------\n"
+           "-----------------------------------------------------------------\n"
+           "| OP | Generic operations       | OP | Misc Tools               |\n"
+           "|====|==========================|====|==========================|\n"
+           "|  0 | Set target process       | 50 | Memory scanner           |\n"
+           "|  1 | Get base address         | 51 | Signature scanner        |\n"
+           "|  2 | Print data type chart    | 60 | Float <-> Hex calculator |\n"
+           "|  3 | Print this menu          | 61 | Base calculator          |\n"
+           "|  4 | Clear history            | 72 | MmGetPhysicalAddress()   |\n"
+           "|  5 | Clear console            | 73 | Get DirectoryTableBase   |\n"
+           "|  6 | Fresh start              |    |                          |\n"
+           "| 99 | Exit                     | CC | Debug [OpenPhysicalMem]  |\n"
+           "|===============================================================|\n"
+           "| OP | Read Operations          | OP | Write Operations         |\n"
+           "|====|==========================|====|==========================|\n"
+           "| 30 | Read memory              | 40 | Write memory             |\n"
+           "| 31 | Read process info        | 41 | Alter process info       |\n"
+           "| 32 | Read string              | 42 | Write string             |\n"
+           "| 33 | Read from last address   | 43 | Write to last address    |\n"
+           "| 34 | Read MSR                 | 44 | Write MSR                |\n"
+           "| 35 | Read physical memory     | 45 | Write to physical memory |\n"
+           "|    |                          | 46 | Zero memory              |\n"
+           "|    |                          | 47 | Freeze value             |\n"
+           "|===============================================================|\n"
+           "| Last read address:      0x%llx%s |\n"
+           "| Last read value:        0x%llx%s |\n"
+           "| Last write address:     0x%llx%s |\n"
+           "| Last write value:       0x%llx%s |\n"
+           "| Last calculator result: 0x%llx%s |\n"
+           "-----------------------------------------------------------------\n",
+           lazercfg->operation_history->last_read_address,      format_spaces[0],
+           lazercfg->operation_history->last_read_value,        format_spaces[1],
+           lazercfg->operation_history->last_write_address,     format_spaces[2],
+           lazercfg->operation_history->last_write_value,       format_spaces[3],
+           lazercfg->operation_history->last_calculator_result, format_spaces[4]
     );
 
-
-    //printf("[0]   - ")
 }
 
 void print_datatypes(void) {

@@ -213,7 +213,7 @@ bool driver_initialize(void) {
     status = SetSystemEnvironmentPrivilege(true, &se_sysenv_enabled);
     if (!NT_SUCCESS(status)) { 
         /* log_write(LOG_ERROR, "SetSystemEnvironmentPrivilege(): %#02lx", status); */
-        LAZER_SETLASTERR("driver_initialize() -> SetSystemEnvironmentPrivilege()", status, true);
+        lazer64_setlasterr("driver_initialize() -> SetSystemEnvironmentPrivilege()", status, true, true);
         return false; 
     }
 
@@ -222,7 +222,7 @@ bool driver_initialize(void) {
     log_write(LOG_DEBUG, "Got '%s' address: %#02llx", ntoskrnl_exe, ntoskrnl_address);
 
     if (!LAZER_CHECK_ADDRESS(ntoskrnl_address)) {
-        LAZER_SETLASTERR("driver_initialize()", LAZER_ERROR_INITINST, false);
+        lazer64_setlasterr("driver_initialize()", LAZER_ERROR_INITINST, false, true);
         return false;
     }
 
@@ -260,7 +260,7 @@ bool driver_initialize(void) {
     status = driver_sendcommand(&cmd);
 
     if (!NT_SUCCESS(status)) { 
-        LAZER_SETLASTERR("driver_initialize()", status, true);
+        lazer64_setlasterr("driver_initialize()", status, true, true);
         return false; 
     }
     log_write(LOG_DEBUG, "driver_sendcommand() success: %ld", status);
@@ -319,7 +319,7 @@ NTSTATUS driver_readmsr(uint64_t cpureg, int32_t *low32, int32_t *high32) {
         *low32  = (int32_t) cmd.data[LAZER_DATA_SPEC_RDMSR_LOW32];
         *high32 = (int32_t) cmd.data[LAZER_DATA_SPEC_RDMSR_HIGH32];
     } else {
-        LAZER_SETLASTERR("driver_readmsr()", status, true);
+        lazer64_setlasterr("driver_readmsr()", status, true, false);
     }
 
     return status;
@@ -336,7 +336,7 @@ NTSTATUS driver_writemsr(uint64_t cpureg, int32_t low32, int32_t high32) {
     status = driver_sendcommand(&cmd);
 
     if (!NT_SUCCESS(status)) {
-        LAZER_SETLASTERR("driver_writemsr()", status, true);
+        lazer64_setlasterr("driver_writemsr()", status, true, false);
     }
 
     return status;
@@ -371,12 +371,12 @@ NTSTATUS driver_copy_memory(uint64_t dest_process_id, uintptr_t dest_address, ui
 
     status = driver_sendcommand(&cmd);
     if (!NT_SUCCESS(status)) {
-        LAZER_SETLASTERR("driver_copy_memory()", status, true);
+        lazer64_setlasterr("driver_copy_memory()", status, true, false);
         return (NTSTATUS) op_result;
     }
 
     if (LAZER_SUCCESS != cmd.exit_status) {
-        LAZER_SETLASTERR("driver_copy_memory()", cmd.exit_status, false);
+        lazer64_setlasterr("driver_copy_memory()", cmd.exit_status, false, false);
         return cmd.exit_status;
     }
 
@@ -386,7 +386,8 @@ NTSTATUS driver_copy_memory(uint64_t dest_process_id, uintptr_t dest_address, ui
 
 uintptr_t driver_get_base_address(process_info* procinfo) {
     if (NULL == procinfo) { 
-        LAZER_SETLASTERR("driver_get_base_address()", LAZER_ERROR_NULLPTR, false);
+        /* non fatal, because there is no input handler for driver_get_base_address(), so NULL can mean not-attached */
+        lazer64_setlasterr("driver_get_base_address()", LAZER_ERROR_NULLPTR, false, false);
         return LAZER_ERROR_NULLPTR; 
     }
     NTSTATUS status = STATUS_SUCCESS;
@@ -405,12 +406,12 @@ uintptr_t driver_get_base_address(process_info* procinfo) {
     status = driver_sendcommand(&cmd);
 
     if (!NT_SUCCESS(status)) {
-        LAZER_SETLASTERR("driver_get_base_address()", status, true);
+        lazer64_setlasterr("driver_get_base_address()", status, true, false);
         return LAZER_ADDRESS_INVALID;
     }
 
     if (LAZER_SUCCESS != cmd.exit_status) {
-        LAZER_SETLASTERR("driver_get_base_address()", cmd.exit_status, false);
+        lazer64_setlasterr("driver_get_base_address()", cmd.exit_status, false, false);
         return LAZER_ADDRESS_INVALID;
     }
 
@@ -419,7 +420,7 @@ uintptr_t driver_get_base_address(process_info* procinfo) {
 
 uintptr_t driver_get_directorybasetable(process_info *procinfo) {
     if (NULL == procinfo) {
-        LAZER_SETLASTERR("driver_get_directorybasetable()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("driver_get_directorybasetable()", LAZER_ERROR_NULLPTR, false, true);
         return LAZER_ERROR_NULLPTR;
     }
 
@@ -432,12 +433,12 @@ uintptr_t driver_get_directorybasetable(process_info *procinfo) {
     status = driver_sendcommand(&cmd);
     
     if (!NT_SUCCESS(status)) {
-        LAZER_SETLASTERR("driver_get_directorybasetable()", status, true);
+        lazer64_setlasterr("driver_get_directorybasetable()", status, true, false);
         return LAZER_ADDRESS_INVALID;
     }
 
     if (LAZER_SUCCESS != cmd.exit_status) {
-        LAZER_SETLASTERR("driver_get_directorybasetable()", cmd.exit_status, false);
+        lazer64_setlasterr("driver_get_directorybasetable()", cmd.exit_status, false, false);
         return LAZER_ADDRESS_INVALID;
     }
 
@@ -446,12 +447,12 @@ uintptr_t driver_get_directorybasetable(process_info *procinfo) {
 
 int driver_mmgetphysicaladdress(uintptr_t target_address, uint32_t *low, int32_t *high, uint64_t *quad) {
     if (quad == NULL || high == NULL || low == NULL) {
-        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("driver_mmgetphysicaladdress()", LAZER_ERROR_NULLPTR, false, true);
         return LAZER_ERROR;
     }
 
     if (!LAZER_CHECK_ADDRESS(target_address)) {
-        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", EINVAL, false);
+        lazer64_setlasterr("driver_mmgetphysicaladdress()", EINVAL, false, false);
         return LAZER_ERROR;
     }
 
@@ -464,12 +465,12 @@ int driver_mmgetphysicaladdress(uintptr_t target_address, uint32_t *low, int32_t
     status = driver_sendcommand(&cmd);
 
     if (!NT_SUCCESS(status)) {
-        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", status, true);
+        lazer64_setlasterr("driver_mmgetphysicaladdress()", status, true, false);
         return LAZER_ERROR;
     }
 
     if (LAZER_SUCCESS != cmd.exit_status) {
-        LAZER_SETLASTERR("driver_mmgetphysicaladdress()", cmd.exit_status, false);
+        lazer64_setlasterr("driver_mmgetphysicaladdress()", cmd.exit_status, false, false);
         return LAZER_ERROR;
     }
 
@@ -482,12 +483,12 @@ int driver_mmgetphysicaladdress(uintptr_t target_address, uint32_t *low, int32_t
 
 NTSTATUS driver_read_phys_memory(byte *output, uintptr_t target_phys_addr, size_t nbytes) {
     if (NULL == output) {
-        LAZER_SETLASTERR("driver_read_phys_memory()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("driver_read_phys_memory()", LAZER_ERROR_NULLPTR, false, true);
         return LAZER_ERROR;
     }
 
     if (!LAZER_CHECK_ADDRESS(target_phys_addr) || nbytes == 0 || nbytes > 64) {
-        LAZER_SETLASTERR("driver_read_phys_memory()", EINVAL, false);
+        lazer64_setlasterr("driver_read_phys_memory()", EINVAL, false, false);
         return LAZER_ERROR;
     }
 
@@ -501,12 +502,12 @@ NTSTATUS driver_read_phys_memory(byte *output, uintptr_t target_phys_addr, size_
     status = driver_sendcommand(&cmd);
 
     if (!NT_SUCCESS(status)) {
-        LAZER_SETLASTERR("driver_read_phys_memory()", status, true);
+        lazer64_setlasterr("driver_read_phys_memory()", status, true, false);
         return status;
     }
 
     if (LAZER_SUCCESS != cmd.exit_status) {
-        LAZER_SETLASTERR("driver_read_phys_memory()", cmd.exit_status, false);
+        lazer64_setlasterr("driver_read_phys_memory()", cmd.exit_status, false, false);
         return LAZER_ERROR;
     }
 
@@ -527,12 +528,12 @@ NTSTATUS driver_open_physical_memory(uint64_t *ret_status, uint32_t *exit_code) 
     *exit_code = cmd.exit_status;
 
     if (!NT_SUCCESS(status)) {
-        LAZER_SETLASTERR("driver_read_phys_memory()", status, true);
+        lazer64_setlasterr("driver_read_phys_memory()", status, true, false);
         return status;
     }
 
     if (LAZER_SUCCESS != cmd.exit_status) {
-        LAZER_SETLASTERR("driver_read_phys_memory()", cmd.exit_status, false);
+        lazer64_setlasterr("driver_read_phys_memory()", cmd.exit_status, false, false);
         return LAZER_ERROR;
     }
 
@@ -540,8 +541,8 @@ NTSTATUS driver_open_physical_memory(uint64_t *ret_status, uint32_t *exit_code) 
 }
 
 NTSTATUS driver_read_memory(process_info* procinfo, uintptr_t address, byte *outbuf, size_t size) {
-    if (NULL == procinfo || 0 == outbuf) { 
-        LAZER_SETLASTERR("driver_read_memory()", LAZER_ERROR_NULLPTR, false);
+    if (NULL == procinfo || NULL == outbuf) { 
+        lazer64_setlasterr("driver_read_memory()", LAZER_ERROR_NULLPTR, false, true);
         return LAZER_ERROR_NULLPTR; 
     }
     return driver_copy_memory(lazercfg->lazer64_procinfo->process_id, (uintptr_t) outbuf, procinfo->process_id, address, size);
@@ -549,7 +550,7 @@ NTSTATUS driver_read_memory(process_info* procinfo, uintptr_t address, byte *out
 
 NTSTATUS driver_write_memory(process_info* procinfo, uintptr_t address, byte* inputbuf, size_t size) {
     if (NULL == procinfo || NULL == inputbuf) { 
-        LAZER_SETLASTERR("driver_write_memory()", LAZER_ERROR_NULLPTR, false);
+        lazer64_setlasterr("driver_write_memory()", LAZER_ERROR_NULLPTR, false, true);
         return LAZER_ERROR_NULLPTR; 
     }
     return driver_copy_memory(procinfo->process_id, address, lazercfg->lazer64_procinfo->process_id, (uintptr_t) inputbuf, size);
